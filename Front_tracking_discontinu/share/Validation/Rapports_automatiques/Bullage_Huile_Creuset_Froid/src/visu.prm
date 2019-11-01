@@ -1,0 +1,34 @@
+Parameters {
+	Title "Tests ibc/ftd"
+	Description "Rapport on IBC (PDF) with interfaces."
+	Author "BM"
+	TestCase ibc_ftd ibc_ftd
+	TestCase regul ibc_ftd
+}
+
+Chapter {
+	Title "FT/IBC"
+	Description " Tests with visit."
+visu {
+	Title "IBC_FTD no velocity regularization"
+
+	mesh ibc_ftd/lata/post_interf.lata DOM
+
+        vector  ibc_ftd/lata/post_interf.lata DOM VITESSE ELEM 
+	width 9cm
+}
+visu {
+	Title "IBC_FTD with velocity regularization"
+
+	mesh regul/lata/post_interf.lata DOM
+
+        vector  regul/lata/post_interf.lata DOM VITESSE ELEM 
+	width 9cm
+}
+
+}
+
+
+
+
+
