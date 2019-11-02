@@ -163,7 +163,7 @@ static void FT_disc_calculer_champs_rho_mu_nu_dipha(const Zone_dis_base&      zo
   const double nu_phase_1 = tab_nu_phase_1(0,0);
   const double delta_nu = nu_phase_1 - nu_phase_0;
   const double mu_phase_0 = nu_phase_0 * rho_phase_0;
-  const double mu_phase_1 = nu_phase_1 * rho_phase_0;
+  const double mu_phase_1 = nu_phase_1 * rho_phase_1;
   const double delta_mu = mu_phase_1 - mu_phase_0;
   double mu = 0.;
   const int formule_mu = fluide.formule_mu();
@@ -179,19 +179,19 @@ static void FT_disc_calculer_champs_rho_mu_nu_dipha(const Zone_dis_base&      zo
         const double indic = indicatrice_elem[i];
         const double rho = indic * delta_rho + rho_phase_0;
         rho_elem[i] = rho;
-        const double nu  = indic * delta_nu  + nu_phase_0;
+        const double nu  = indic * delta_nu  + nu_phase_0; // HMS: faux, car nu = mu/rho
         nu_elem[i]  = nu;
         switch(formule_mu)
           {
           case 0: // standard default method (will be removed)
             {
-              // Cerr << "standard" << finl;
+              Cerr << "!! Attention !! mu standard incorect !!" << finl;
               mu  = nu * rho;
             }
             break;
           case 1: // Arithmetic average
             {
-              Cerr << "arithmetic" << finl;
+              //Cerr << "arithmetic" << finl;
               mu  = indic * delta_mu  + mu_phase_0;
             }
             break;
@@ -210,7 +210,9 @@ static void FT_disc_calculer_champs_rho_mu_nu_dipha(const Zone_dis_base&      zo
             }
           }
         mu_elem[i]  = mu;
+        nu_elem[i]  = mu / rho; // correction de nu, fin HMS
       }
+
     rho_elem.echange_espace_virtuel();
     mu_elem.echange_espace_virtuel();
     nu_elem.echange_espace_virtuel();
