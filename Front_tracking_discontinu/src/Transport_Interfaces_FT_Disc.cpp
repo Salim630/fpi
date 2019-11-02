@@ -6146,7 +6146,8 @@ void Transport_Interfaces_FT_Disc::calculer_vitesse_repere_local(const Maillage_
       double norme_carre = nx * nx + ny * ny + nz * nz;
       prodscal /= norme_carre;
       if (norme_carre != 0.)
-        {   // HMS : on impose le deplacement des marquers par la vitesse moyenne de l'interface uniquement
+        {
+          // HMS : on impose le deplacement des marquers par la vitesse moyenne de l'interface uniquement
           deplacement(som, 0) =  Vitesses(compo, 0); // + nx * prodscal
           deplacement(som, 1) =  Vitesses(compo, 1); // + ny * prodscal
           if (dim3)

@@ -349,7 +349,7 @@ inline double Eval_Dift_VDF_var_Face::flux_arete_interne(const DoubleTab& inco, 
   double tau_tr = (inco[fac2]-inco[fac1])/dist_face(fac1,fac2,ori3);
   double reyn = (tau + tau_tr)*visc_turb;
 
-  flux = 0.25*(reyn + visc_lam*tau)*(surface(fac1)+surface(fac2))
+  flux = 0.25*(reyn + visc_lam*(tau+tau_tr))*(surface(fac1)+surface(fac2))
          *(porosite(fac1)+porosite(fac2));
   return flux;
 }
@@ -377,7 +377,7 @@ inline void Eval_Dift_VDF_var_Face::coeffs_arete_interne(int fac1, int fac2, int
   double tau_tr = 1/dist_face(fac1,fac2,ori3);
   double reyn = (tau + tau_tr)*visc_turb;
 
-  aii = ajj = 0.25*(reyn + visc_lam*tau)*(surface(fac1)+surface(fac2))
+  aii = ajj = 0.25*(reyn + visc_lam*(tau+tau_tr))*(surface(fac1)+surface(fac2))
               *(porosite(fac1)+porosite(fac2));
 }
 
@@ -490,9 +490,9 @@ inline void Eval_Dift_VDF_var_Face::flux_arete_fluide(const DoubleTab& inco, int
   double surf = 0.5*(surface(fac1)+surface(fac2));
   double poros = 0.5*(porosite(fac1)+porosite(fac2));
   double reyn = (tau + tau_tr)*visc_turb;
-  double coef = (tau*visc_lam + reyn);
+  double coef = ((tau + tau_tr)*visc_lam + reyn);
   flux3 = coef*surf*poros;
-  flux1_2 = (tau_tr*visc_lam + reyn)*surface(fac3)*porosite(fac3);
+  flux1_2 = ((tau + tau_tr)*visc_lam + reyn)*surface(fac3)*porosite(fac3);
 
 }
 
@@ -516,13 +516,13 @@ inline void Eval_Dift_VDF_var_Face::coeffs_arete_fluide(int fac1, int fac2, int 
   double surf = 0.5*(surface(fac1)+surface(fac2));
   double poros = 0.5*(porosite(fac1)+porosite(fac2));
   double reyn = (tau + tau_tr)*visc_turb;
-  double coef = (tau*visc_lam + reyn);
+  double coef = ((tau + tau_tr)*visc_lam + reyn);
 
   // Calcul de aii3_4
   aii3_4 = coef*surf*poros;
 
   // Calcul de aii1_2 et ajj1_2
-  aii1_2 = ajj1_2  = (tau_tr*visc_lam + reyn)*surface(fac3)*porosite(fac3);
+  aii1_2 = ajj1_2  = ((tau + tau_tr)*visc_lam + reyn)*surface(fac3)*porosite(fac3);
 }
 
 //// secmem_arete_fluide
@@ -714,9 +714,9 @@ inline void Eval_Dift_VDF_var_Face::flux_arete_paroi_fluide(const DoubleTab& inc
   double surf = 0.5*(surface(fac1)+surface(fac2));
   double poros = 0.5*(porosite(fac1)+porosite(fac2));
   double reyn = (tau + tau_tr)*visc_turb;
-  double coef = (tau*visc_lam + reyn);
+  double coef = ((tau + tau_tr)*visc_lam + reyn);
   flux3 = coef*surf*poros;
-  flux1_2 = (tau_tr*visc_lam + reyn)*surface(fac3)*porosite(fac3);
+  flux1_2 = ((tau + tau_tr)*visc_lam + reyn)*surface(fac3)*porosite(fac3);
 
 }
 
@@ -744,10 +744,10 @@ inline void Eval_Dift_VDF_var_Face::coeffs_arete_paroi_fluide(int fac1, int fac2
   double surf = 0.5*(surface(fac1)+surface(fac2));
   double poros = 0.5*(porosite(fac1)+porosite(fac2));
   double reyn = (tau + tau_tr)*visc_turb;
-  double coef = (tau*visc_lam + reyn);
+  double coef = ((tau + tau_tr)*visc_lam + reyn);
 
   aii3_4 = coef*surf*poros;
-  aii1_2 = ajj1_2 =(tau_tr*visc_lam + reyn)*surface(fac3)*porosite(fac3);
+  aii1_2 = ajj1_2 =((tau + tau_tr)*visc_lam + reyn)*surface(fac3)*porosite(fac3);
 }
 
 
@@ -811,12 +811,12 @@ inline void Eval_Dift_VDF_var_Face::flux_arete_periodicite(const DoubleTab& inco
   double tau_tr = (inco[fac2]-inco[fac1])/dist1_2;
   double reyn = (tau + tau_tr)*visc_turb;
 
-  flux = 0.25*(reyn + visc_lam*tau)*(surface(fac1)+surface(fac2))
+  flux = 0.25*(reyn + visc_lam*(tau + tau_tr))*(surface(fac1)+surface(fac2))
          *(porosite(fac1)+porosite(fac2));
 
   flux3_4 = flux;
 
-  flux = 0.25*(reyn + visc_lam*tau_tr)*(surface(fac3)+surface(fac4))
+  flux = 0.25*(reyn + visc_lam*(tau + tau_tr))*(surface(fac3)+surface(fac4))
          *(porosite(fac3)+porosite(fac4));
 
   flux1_2 = flux;
@@ -846,7 +846,7 @@ inline void Eval_Dift_VDF_var_Face::coeffs_arete_periodicite(int fac1, int fac2,
   double tau_tr = 1/dist1_2;
   double reyn = (tau + tau_tr)*visc_turb;
 
-  aii = ajj =0.25*(reyn + visc_lam*tau)*(surface(fac1)+surface(fac2))*(porosite(fac1)+porosite(fac2));
+  aii = ajj =0.25*(reyn + visc_lam*(tau + tau_tr))*(surface(fac1)+surface(fac2))*(porosite(fac1)+porosite(fac2));
 }
 
 
@@ -974,9 +974,9 @@ inline void Eval_Dift_VDF_var_Face::flux_arete_symetrie_fluide(const DoubleTab& 
   double surf = 0.5*(surface(fac1)+surface(fac2));
   double poros = 0.5*(porosite(fac1)+porosite(fac2));
   double reyn = (tau + tau_tr)*visc_turb;
-  double coef = (tau*visc_lam + reyn);
+  double coef = ((tau + tau_tr)*visc_lam + reyn);
   flux3 = coef*surf*poros;
-  flux1_2 = (tau_tr*visc_lam + reyn)*surface(fac3)*porosite(fac3);
+  flux1_2 = ((tau + tau_tr)*visc_lam + reyn)*surface(fac3)*porosite(fac3);
 }
 
 //// coeffs_arete_symetrie_fluide
@@ -999,13 +999,13 @@ inline void Eval_Dift_VDF_var_Face::coeffs_arete_symetrie_fluide(int fac1, int f
   double surf = 0.5*(surface(fac1)+surface(fac2));
   double poros = 0.5*(porosite(fac1)+porosite(fac2));
   double reyn = (tau + tau_tr)*visc_turb;
-  double coef = (tau*visc_lam + reyn);
+  double coef = ((tau + tau_tr)*visc_lam + reyn);
 
   // Calcul de aii3_4
   aii3_4 = coef*surf*poros;
 
   // Calcul de aii1_2 et ajj1_2
-  aii1_2 = ajj1_2  = (tau_tr*visc_lam + reyn)*surface(fac3)*porosite(fac3);
+  aii1_2 = ajj1_2  = ((tau + tau_tr)*visc_lam + reyn)*surface(fac3)*porosite(fac3);
 }
 
 //// secmem_arete_symetrie_fluide
