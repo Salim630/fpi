@@ -6150,7 +6150,7 @@ void Transport_Interfaces_FT_Disc::calculer_vitesse_repere_local(const Maillage_
           deplacement(som, 0) = nx * prodscal + Vitesses(compo, 0);
           deplacement(som, 1) = ny * prodscal + Vitesses(compo, 1);
           if (dim3)
-            deplacement(som, 2) = nz * prodscal + Vitesses(compo, 1);
+            deplacement(som, 2) = nz * prodscal + Vitesses(compo, 2);
         }
     }
 }
@@ -6253,6 +6253,11 @@ void Transport_Interfaces_FT_Disc::deplacer_maillage_ft_v_fluide(const double te
       // et changement de signe car on veut la variation de volume de la phase 0
       // (et non celle de la phase 1)
       var_volume *= -delta_t;
+// Debug GB 2019.02.08 Conservation de volume
+#if DEBUG_CONSERV_VOLUME
+      double  volume_avt = remaillage_interface().calculer_volume_mesh(maillage);
+      double dvol_theo_depl = remaillage_interface().calculer_somme_dvolume(maillage, var_volume);
+#endif
       maillage.preparer_tableau_avant_transport(var_volume,
                                                 maillage.desc_sommets());
       // Transport avec le deplacement interpole :
@@ -6270,6 +6275,16 @@ void Transport_Interfaces_FT_Disc::deplacer_maillage_ft_v_fluide(const double te
       remaillage_interface().calculer_variation_volume(maillage,
                                                        position_precedente,
                                                        var_volume_deplacement);
+#if DEBUG_CONSERV_VOLUME
+      double  volume_apres = remaillage_interface().calculer_volume_mesh(maillage);
+      double dvol_reel_depl = remaillage_interface().calculer_somme_dvolume(maillage, var_volume_deplacement);
+      Cerr << "Transport_Interfaces_FT_Disc::calculer_vitesse_repere_local " << finl
+           << " volume avt= " << volume_avt << finl
+           << " apres= " << volume_apres << finl
+           << " dvol_theo_depl= " << dvol_theo_depl << finl
+           << " dvol_reel_depl= " << dvol_reel_depl << finl
+           << finl;
+#endif
       // Calcul de la variation de volume de la phase 0 a imposer lors de la correction
       // de volume :
       var_volume -= var_volume_deplacement;
@@ -6621,7 +6636,8 @@ void Transport_Interfaces_FT_Disc::mettre_a_jour(double temps)
 
   {
     const double volume_phase_1 = calculer_integrale_indicatrice(indicatrice_.valeurs());
-    Cerr << "Volume_phase_1 " << Nom(volume_phase_1, "%20.14g") << " time " << temps << finl;
+    if (Process::je_suis_maitre())
+      Cerr << "Volume_phase_1 " << Nom(volume_phase_1, "%20.14g") << " time " << temps << finl;
   }
 
   // Affichage de la surface totale d'interfaces dans le fichier .err

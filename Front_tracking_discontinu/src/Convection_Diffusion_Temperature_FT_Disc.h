@@ -54,6 +54,7 @@ public:
   const Champ_base& vitesse_pour_transport();
 
 
+  int get_phase() const;
   void    discretiser(void);
 
 protected:

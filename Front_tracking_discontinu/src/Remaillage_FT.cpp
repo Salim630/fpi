@@ -463,8 +463,15 @@ int Remaillage_FT::calculer_differentielle_volume(
           const double L  = sqrt(L2);
           const double nx = normale_facettes(facette, 0);
           const double ny = normale_facettes(facette, 1);
-          const double dv_dn1 = L * (r1 * un_tiers + r2 * un_sixieme) * angle_bidim_axi;
-          const double dv_dn2 = L * (r2 * un_tiers + r1 * un_sixieme) * angle_bidim_axi;
+          // G.B. 06/02/2019. Correction of the differential. inversion 1/3 and 1/6.
+          // Guldin's theorem: rotating a triangle generates a volume V = alpha * dG * A
+          //   where alpha is the angle of rotation (Maillage_FT_Disc::angle_bidim_axi = 2Pi) here,
+          //   dG=x_G is the distance of the barycenter G to the axis of rotation, and
+          //   A=1/2*L*dn is the area of the triangle created by the "facette" (of length L) and the motion of one summit by dn along the normal.
+          // There is in fact 2 center of gravity depending on the summit you move, G_1 (moving s1) and G_2 (moving s2)
+          // We find : x_G = 1/3*x_s1 + 2/3*x_s2 + 2/3*dnx (with dnx->0)
+          const double dv_dn1 = L * (r1 * un_sixieme + r2 * un_tiers) * angle_bidim_axi;
+          const double dv_dn2 = L * (r2 * un_sixieme + r1 * un_tiers) * angle_bidim_axi;
           differentielle_volume(s1, 0) += nx * dv_dn1;
           differentielle_volume(s1, 1) += ny * dv_dn1;
           differentielle_volume(s2, 0) += nx * dv_dn2;
@@ -512,6 +519,12 @@ double Remaillage_FT::calculer_variation_volume_facette_2D(int fa7, const Mailla
   const IntTab& facettes = maillage.facettes();
   const DoubleTab& sommets = maillage.sommets();
 
+#if DEBUG_CONSERV_VOLUME
+#if VERBEUX
+  const ArrOfDouble& surface_facettes = maillage.get_update_surface_facettes();
+  const DoubleTab& normales_facettes = maillage.get_update_normale_facettes();
+#endif
+#endif
   double coord_som0[2], coord_som1[2], coord_som_opp[2];
   const int som0 = facettes(fa7,0);
   const int som1 = facettes(fa7,1);
@@ -529,7 +542,7 @@ double Remaillage_FT::calculer_variation_volume_facette_2D(int fa7, const Mailla
   int ordre = 0;
   if ( (pe_owner[som0]==pe_owner[som1] && som0>som1) || (pe_owner[som0]>pe_owner[som1]) )
     {
-      //l'odre est inverse si :
+      //l'ordre est inverse si :
       // - les 2 sommets sont sur le meme proc, mais l'indice du sommet1 est plus petit que celui du sommet0
       // - ou si le numero du proc du sommet1 est plus petit que celui du proc du sommet0
       ordre = 1;
@@ -549,8 +562,10 @@ double Remaillage_FT::calculer_variation_volume_facette_2D(int fa7, const Mailla
       coord_som_opp[0] = sommets(som1,0);
       coord_som_opp[1] = sommets(som1,1);
     }
-  double v1 = FTd_calculer_aire_triangle(coord_som0,coord_som1,coord_som_opp) * 0.5;
+  double v1 = FTd_calculer_aire_triangle(coord_som0,coord_som1,coord_som_opp);
   if (bidim_axi)
+    // x_G : x coordinate of the centre of gravity is located at a third of the position of all vertex.
+    // Guldin's Theorem :
     v1 *= (coord_som0[0] + coord_som1[0] + coord_som_opp[0]) * un_tiers * angle_bidim_axi;
 
   //second triangle
@@ -572,10 +587,66 @@ double Remaillage_FT::calculer_variation_volume_facette_2D(int fa7, const Mailla
       coord_som_opp[0] = sommets(som0,0);
       coord_som_opp[1] = sommets(som0,1);
     }
-  double v2 = FTd_calculer_aire_triangle(coord_som0,coord_som1,coord_som_opp) * 0.5;
+  double v2 = FTd_calculer_aire_triangle(coord_som0,coord_som1,coord_som_opp);
   if (bidim_axi)
     v2 *= (coord_som0[0] + coord_som1[0] + coord_som_opp[0]) * un_tiers * angle_bidim_axi;
+#if DEBUG_CONSERV_VOLUME
+#if VERBEUX
+// On calcule pour comparaison la variation de volume dv par difference simple entre les
+// volumes initiaux et finaux (avant vs apres mouvement).
+// Je n'ai pas verifie si la somme est la meme in fine, sur le maillage.
+// En tout cas, sur un seul segment, les deux methodes different car lorsque la projection
+// sur dy du segment change, le volume genere par cette facette change, au detriment de sa voisine.
+// Mais in fine, ca n'a pas d'effet au global.
+// La methode standard, originelle, ne considere pas le mouvement d'un sommet selon la direction de la
+// facette comme generatrice de variation de volume. C'est mieux ainsi, de voir le transfert d'une facette
+// a l'autre comme globalement conservatif, donc pas comme une variation de volume.
+// Donc v1+v2 c'est mieux :D
+  if (bidim_axi)
+    {
+      const double un_sixieme = 1. / 6.;
+      double dy = position_initiale(som0,1)-position_initiale(som1,1);
+      double x0 = position_initiale(som0,0);
+      double x1 = position_initiale(som1,0);
+      // On n'a pas la vieille normale et la vieille surface pour calculer dy par s*nx
+      // ON S'APPUIE SUR ORDRE en esperant que ca marche.
+      const double vp1 = angle_bidim_axi * un_sixieme *dy*(x1*x1+x0*x0+x1*x0);
 
+      // Apres deplacement :
+      dy = sommets(som0,1)-sommets(som1,1);
+      x0 = sommets(som0,0);
+      x1 = sommets(som1,0);
+
+      //const double vp2 = angle_bidim_axi * un_sixieme *s*normale_scalaire_direction_x*(x1*x1+x0*x0+x1*x0);
+      const double vp2 = angle_bidim_axi * un_sixieme *dy*(x1*x1+x0*x0+x1*x0);
+
+      // Si tout va bien, on devrait avoir le meme signe :
+      const double s = surface_facettes[fa7];
+      const double normale_scalaire_direction_x = normales_facettes(fa7, 0);
+      Cerr << "dy=" << dy << " s.nx " << s*normale_scalaire_direction_x << finl;
+      assert(normale_scalaire_direction_x*dy>=0.);
+
+      const double dv = vp2 - vp1;
+
+      Cerr << "Remaillage_FT::calculer_variation_volume_facette_2D" << finl;
+      Cerr << "Positions ini(x;y) -> fin(x;y) "
+           << "som0(" << position_initiale(som0,0)<< ";"<< position_initiale(som0,1)<< ") "
+           "som1(" << position_initiale(som1,0)<< ";"<< position_initiale(som1,1)<< ") "
+           << " -> "
+           "som0(" << sommets(som0,0)<< ";"<< sommets(som0,1)<< ") "
+           "som1(" << sommets(som1,0)<< ";"<< sommets(som1,1)<< ") "
+           << finl;
+      Cerr << "v1= " << v1 << finl;
+      Cerr << "v2= " << v2 << finl;
+      Cerr << "v1+v2= " << v1+v2 << finl;
+      Cerr << "vp1= " << vp1 << finl;
+      Cerr << "vp2= " << vp2 << finl;
+      Cerr << "dv= " << dv << finl;
+      return v1+v2; // quand meme !
+      //return dv;
+    }
+#endif
+#endif
   return v1 + v2;
 }
 
@@ -653,7 +724,7 @@ double Remaillage_FT::calculer_variation_volume_facette_3D(int fa7, const Mailla
       facette[i] = facettes(fa7, i);
   }
   const DoubleTab& position_finale = maillage.sommets();
-#define ALGO_NON_PARALLELE
+
 #ifdef ALGO_NON_PARALLELE
   int ordre_sommets[3] = { 0, 1, 2 };
   // Calcul de l'ordre dans lequel on va construire les 3 tetraedres (ordre croissant des indices globaux
@@ -756,9 +827,8 @@ double Remaillage_FT::calculer_variation_volume(const Maillage_FT_Disc& maillage
       else
         dv = calculer_variation_volume_facette_2D(fa7,maillage,position_initiale);
       dvolume_total += dv;
-      // Repartition du volume engendre par la facette sur les trois sommets.
-      // Certains sommets sont virtuels, il faudra donc "collecter"
-      // les contributions a la fin.
+      // Redistributes the volume variation to the ndim vertices (2 or 3).
+      // Some volume will end on virtual vertices; hence, we'll have to "collect" contribution in the end.
       dv *= inv_som_facette;
       int isom;
       for (isom = 0 ; isom < nb_som_par_facette ; isom++)
@@ -767,7 +837,8 @@ double Remaillage_FT::calculer_variation_volume(const Maillage_FT_Disc& maillage
           varVolume[sommet] += dv;
         }
     }
-  // Collection des variations de volume
+  // Collecting varVolume contributions on virtual space.
+  // and finally add it to the real contribution.
   const Desc_Structure_FT& desc = maillage.desc_sommets();
   desc.collecter_espace_virtuel(varVolume, MD_Vector_tools::EV_SOMME);
   desc.echange_espace_virtuel(varVolume);
@@ -987,6 +1058,74 @@ int Remaillage_FT::calculer_barycentre_facettes_voisines(const Maillage_FT_Disc&
   return res;
 }
 
+#if DEBUG_CONSERV_VOLUME
+// Beware, this algorithm is only efficient
+// IF the interfaces are closed in the direction considered
+//    (for the normal as well as for the coordinate)!
+// OR IF the opening face is at the value zero of the coordinate?
+double Remaillage_FT::calculer_volume_mesh(const Maillage_FT_Disc& mesh) const
+{
+  const int n = mesh.nb_facettes();
+  double volume = 0.;
+  const ArrOfDouble& surfaces_facettes = mesh.get_update_surface_facettes();
+  const DoubleTab& normales_facettes = mesh.get_update_normale_facettes();
+  const IntTab& facettes = mesh.facettes();
+  const DoubleTab& sommets = mesh.sommets();
+  const int DIR_projection = 0; // On projette sur (0->x ou 1->y ou 2->z if DIM=3)
+  for (int i = 0; i < n; i++)
+    {
+      if (mesh.facette_virtuelle(i))
+        continue;
+      const double s = surfaces_facettes[i];
+      const double normale_scalaire_direction = normales_facettes(i, DIR_projection);
+      // Coordonnee du centre de gravite de la facette
+      const int i0 = facettes(i,0);
+      const int i1 = facettes(i,1);
+      double coord_centre_gravite_DIR = sommets(i0,DIR_projection) + sommets(i1,DIR_projection) ;
+      if (Objet_U::dimension==3)
+        {
+          const int i2 = facettes(i,2);
+          coord_centre_gravite_DIR += sommets(i2,DIR_projection);
+        }
+      coord_centre_gravite_DIR /= (float) Objet_U::dimension;
+      //const double coord_centre_gravite_i = (sommets(i0,0) + sommets(i1,0) + sommets(i2,0)) / 3.;
+      //const double coord_centre_gravite_k = (sommets(i0,2) + sommets(i1,2) + sommets(i2,2)) / 3.;
+      double volume_prisme=0;
+      if (Objet_U::bidim_axi)
+        {
+          const double angle_bidim_axi =  Objet_U::bidim_axi ? Maillage_FT_Disc::angle_bidim_axi() : 0.;
+          const double x0 = sommets(i0,0);
+          const double x1 = sommets(i1,0);
+          // The volume can actually be negative when normale_scalaire_direction is negative.
+          //
+          volume_prisme = angle_bidim_axi / 6. * (s * normale_scalaire_direction) * (x0*x0+x1*x1+x0*x1);
+        }
+      else
+        {
+          volume_prisme = coord_centre_gravite_DIR * s * normale_scalaire_direction; // coord_centre_gravite_DIR, where dir should be the
+        }
+      volume += volume_prisme;
+    }
+  volume = Process::mp_sum(volume);
+  return volume;
+}
+double Remaillage_FT::calculer_somme_dvolume(const Maillage_FT_Disc& mesh, const ArrOfDouble& dvolume) const
+{
+  const int n = dvolume.size_array();
+  assert(n == mesh.nb_sommets());
+  double somme = 0.;
+  for (int i = 0; i < n; i++)
+    {
+      if (!mesh.sommet_virtuel(i))
+        {
+          somme += dvolume[i];
+        }
+    }
+  somme = Process::mp_sum(somme);
+  return somme;
+}
+#endif
+
 // Description:
 //  Deplace les sommets du maillage pour les redistribuer de facon homogene.
 //  Le deplacement est la somme d'une composante tangentielle et d'une composante
@@ -1073,6 +1212,7 @@ double Remaillage_FT::redistribuer_sommets(Maillage_FT_Disc&   maillage,
         }
 
       // Produit scalaire normale * differentielle:
+      // (is actually equal to the norm of the differential IF we're not on a contact line)
       const double normale_scal_diff = normale[0] * diff[0] + normale[1] * diff[1] + normale[2] * diff[2];
       const double i_normale_scal_diff = (normale_scal_diff == 0.) ? 0. : 1./normale_scal_diff;
       // Produit scalaire de deplacement tangent avec la normale:
@@ -1123,13 +1263,31 @@ double Remaillage_FT::redistribuer_sommets(Maillage_FT_Disc&   maillage,
   desc.echange_espace_virtuel(deplacement);
   maillage.preparer_tableau_avant_transport(var_volume_impose, desc);
   maillage.preparer_tableau_avant_transport(sommets, desc);
+
+#if DEBUG_CONSERV_VOLUME
+  double volume_init = calculer_volume_mesh(maillage);
+  double dvol_init   = calculer_somme_dvolume(maillage, var_volume_impose);
+#endif
   maillage.transporter(deplacement);
+#if DEBUG_CONSERV_VOLUME
+  double volume_apres = calculer_volume_mesh(maillage);
+#endif
   const int new_nb_som = maillage.nb_sommets();
   maillage.update_tableau_apres_transport(var_volume_impose, new_nb_som, desc);
   maillage.update_tableau_apres_transport(sommets, new_nb_som, desc);
 
   // Calcul de la variation de volume obtenue :
   double dvolume_tot = calculer_variation_volume(maillage, sommets, var_volume_obtenu);
+#if DEBUG_CONSERV_VOLUME
+  double  volume_apres2 = calculer_volume_mesh(maillage);
+  double dvol_obtenu = calculer_somme_dvolume(maillage, var_volume_obtenu);
+  Cerr << "Remaillage_FT::redistribuer_sommets BILAN "
+       << " volume avt= " << volume_init
+       << " apres= " << volume_apres
+       << " apres2= " << volume_apres2
+       << " dvolume demande= " << dvol_init
+       << " obtenu= " << dvol_obtenu << finl;
+#endif
   return dvolume_tot;
 }
 
@@ -1187,53 +1345,6 @@ void Remaillage_FT::barycentrer_lisser_apres_remaillage(Maillage_FT_Disc& mailla
   nettoyer_maillage(maillage);
 }
 
-// POUR DEBUGGER LA CONSERVATION DU VOLUME
-#define DEBUG_CONSERV_VOLUME 0
-#if DEBUG_CONSERV_VOLUME
-static double calculer_volume_mesh(const Maillage_FT_Disc& mesh)
-{
-  const int n = mesh.nb_facettes();
-  double volume = 0.;
-  const ArrOfDouble& surfaces_facettes = mesh.get_update_surface_facettes();
-  const DoubleTab& normales_facettes = mesh.get_update_normale_facettes();
-  const IntTab& facettes = mesh.facettes();
-  const DoubleTab& sommets = mesh.sommets();
-  for (int i = 0; i < n; i++)
-    {
-      if (mesh.facette_virtuelle(i))
-        continue;
-      const double s = surfaces_facettes[i];
-      const double normale_scalaire_direction = normales_facettes(i, 0); // On projette sur x
-      // Coordonnee du centre de gravite de la facette
-      const int i0 = facettes(i,0);
-      const int i1 = facettes(i,1);
-      const int i2 = facettes(i,2);
-      const double coord_centre_gravite_i = (sommets(i0,0) + sommets(i1,0) + sommets(i2,0)) / 3.;
-      //const double coord_centre_gravite_j = (sommets(i0,1) + sommets(i1,1) + sommets(i2,1)) / 3.;
-      //const double coord_centre_gravite_k = (sommets(i0,2) + sommets(i1,2) + sommets(i2,2)) / 3.;
-      const double volume_prisme = coord_centre_gravite_i * s * normale_scalaire_direction;
-      volume += volume_prisme;
-    }
-  volume = Process::mp_sum(volume);
-  return volume;
-}
-static double calculer_somme_dvolume(const Maillage_FT_Disc& mesh, const ArrOfDouble& dvolume)
-{
-  const int n = dvolume.size_array();
-  assert(n == mesh.nb_sommets());
-  double somme = 0.;
-  for (int i = 0; i < n; i++)
-    {
-      if (!mesh.sommet_virtuel(i))
-        {
-          somme += dvolume[i];
-        }
-    }
-  somme = Process::mp_sum(somme);
-  return somme;
-}
-#endif
-
 // Description: Algorithme general de lissage du maillage. Permet de barycentrer,
 //  regulariser la courbure, et d'appliquer une correction de volume en deplacant
 //  les noeuds dans la direction normale.
@@ -1264,11 +1375,14 @@ double Remaillage_FT::regulariser_maillage(Maillage_FT_Disc& maillage,
   for(iteration = 0; 1; iteration++)
     {
 #if DEBUG_CONSERV_VOLUME
-      double volume_initial, volume_final;
+      double volume_initial=0, volume_final=0, dvol_init=0, dvol_redistributed=0;
+      double dvol_apres_regulariser=0, dvol_obtenu=0, dvol_futur=0;
+      double volume_interm1=0, volume_interm2=0, volume_interm3=0;
       {
         double vol = calculer_volume_mesh(maillage);
         volume_initial = vol;
         double dvol = calculer_somme_dvolume(maillage, var_volume);
+        dvol_init = dvol;
         Cerr.precision(16);
         Cerr << "Remaillage_FT::regulariser_maillage iteration " << iteration
              << " volume= " << vol << " dvolume= " << dvol << finl;
@@ -1284,7 +1398,9 @@ double Remaillage_FT::regulariser_maillage(Maillage_FT_Disc& maillage,
 
 #if DEBUG_CONSERV_VOLUME
       {
+        volume_interm1 = calculer_volume_mesh(maillage);
         double dvol = calculer_somme_dvolume(maillage, var_volume);
+        dvol_redistributed = dvol;
         Cerr << "Remaillage_FT::regulariser_maillage apres lisser dvolume "
              <<  " dvolume= " << dvol << finl;
 
@@ -1307,7 +1423,10 @@ double Remaillage_FT::regulariser_maillage(Maillage_FT_Disc& maillage,
 
 #if DEBUG_CONSERV_VOLUME
           {
+            volume_interm2 = calculer_volume_mesh(maillage);
             double dvol = calculer_somme_dvolume(maillage, dv_courbure);
+            double dvolnew = calculer_somme_dvolume(maillage, var_volume);
+            dvol_apres_regulariser = dvolnew;
             Cerr << "Remaillage_FT::regulariser_maillage apres calcul dvcourbure "
                  <<  " dv courbure= " << dvol << finl;
 
@@ -1326,13 +1445,16 @@ double Remaillage_FT::regulariser_maillage(Maillage_FT_Disc& maillage,
         redistribuer_sommets(maillage,
                              facteur, // relaxation_direction_tangente
                              1.,    // relaxation_direction_normale
-                             var_volume,
-                             var_volume_obtenu);
+                             var_volume /* imposed */,
+                             var_volume_obtenu /* resulting */);
 #if DEBUG_CONSERV_VOLUME
       {
+        volume_interm3 = calculer_volume_mesh(maillage);
         double dvol = calculer_somme_dvolume(maillage, var_volume);
+        dvol_obtenu = calculer_somme_dvolume(maillage, var_volume_obtenu);
         Cerr << "Remaillage_FT::regulariser_maillage apres redistribuer_sommets " << iteration
-             << " dvolume avant ajout= " << dvol << finl;
+             << " dvolume demande= " << dvol
+             << " dvolume obtenu= " << dvol_obtenu << finl;
 
       }
 #endif
@@ -1345,11 +1467,32 @@ double Remaillage_FT::regulariser_maillage(Maillage_FT_Disc& maillage,
         volume_final = vol;
         double vvol = calculer_somme_dvolume(maillage, var_volume_obtenu);
         double dvol = calculer_somme_dvolume(maillage, var_volume);
+        dvol_futur = dvol;
         Cerr << "Remaillage_FT::regulariser_maillage apres redistribuer_sommets " << iteration
              << " volume= " << vol
              << " var_vol obtenu= " << vvol
              << " dvolume= " << dvol
              << " variation calculee= " << volume_final-volume_initial << finl;
+
+        Cerr << "Remaillage_FT::regulariser_maillage "
+             << "iteration " << iteration << finl
+             << "volume_initial " << volume_initial << finl
+             << "volume_final " << volume_final << finl
+             << "dvol_init " << dvol_init << finl
+             << "dvol_redistributed " << dvol_redistributed  << finl//par lisser_dvol
+             << "dvol_apres_regulariser " << dvol_apres_regulariser << finl // apres le lissage de la courbure
+             << "dvol_obtenu " << dvol_obtenu  << finl                      // uniquement celui engendre par redistribuer_sommets
+             << "dvol_futur " << dvol_futur << finl      // celui pour l'iteration future.
+             << finl;
+
+        Cerr << "Remaillage_FT::regulariser_maillage VOLUMES "
+             << "iteration " << iteration << finl
+             << "volume_initial " << volume_initial << finl
+             << "volume_interm1 " << volume_interm1 << finl
+             << "volume_interm2 " << volume_interm2 << finl
+             << "volume_interm3 " << volume_interm3 << finl
+             << "volume_final " << volume_final << finl
+             << finl;
 
       }
 #endif
@@ -2228,12 +2371,13 @@ double Remaillage_FT::calculer_longueurIdeale2_arete(const Maillage_FT_Disc& mai
           const IntTab& elem_faces = refzone_VF_->elem_faces();
           int k;
           FTd_vecteur3 v = {0., 0., 0.};
+          FTd_vecteur3 xyz = {x, y, z};
           FTd_vecteur3 delta_xv = {0., 0., 0.};
           const int dim = Objet_U::dimension;
           double norme2 = 0.;
           for (k = 0; k < dim; k++)
             {
-              v[k] = x - sommets(som0, k);
+              v[k] = xyz[k] - sommets(som0, k);
               norme2 += v[k] * v[k];
               const int face0 = elem_faces(elem0,k);
               const int face1 = elem_faces(elem0,k+dim);
@@ -2686,7 +2830,6 @@ int Remaillage_FT::diviser_grandes_aretes(Maillage_FT_Disc& maillage) const
   maillage.maillage_modifie(Maillage_FT_Disc::MINIMAL);
 
   //  return res;
-  return 1;
   return nb_aretes_divis_tot;
 }
 

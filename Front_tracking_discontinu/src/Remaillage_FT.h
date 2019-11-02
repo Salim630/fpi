@@ -36,6 +36,8 @@ class DoubleTabFT;
 class Zone_VF;
 class Param;
 
+// POUR DEBUGGER LA CONSERVATION DU VOLUME
+#define DEBUG_CONSERV_VOLUME 0
 // ====================================================================
 // .DESCRIPTION        : class Remaillage_FT
 //  Cette classe implemente les procedures de remaillage des interfaces pour le Front-Tracking :
@@ -81,6 +83,10 @@ public:
                                     const double coeff,
                                     ArrOfDouble& dvolume) const;
 
+#if DEBUG_CONSERV_VOLUME
+  double calculer_volume_mesh(const Maillage_FT_Disc& mesh) const;
+  double calculer_somme_dvolume(const Maillage_FT_Disc& mesh, const ArrOfDouble& dvolume) const;
+#endif
 protected:
 
   int tester_a_remailler(const Maillage_FT_Disc& maillage) const;

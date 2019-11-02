@@ -5,7 +5,7 @@
 #include <Tool.h>
 
 //declaration des membre donnees
-std::string Tool::myCode="commicode 000std";
+std::string Tool::myCode="commicode 001std";
 
 double Tool::myMuPhase1=-1;
 double Tool::myMuPhase0=-1;

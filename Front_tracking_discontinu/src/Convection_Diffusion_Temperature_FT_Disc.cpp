@@ -156,6 +156,10 @@ void Convection_Diffusion_Temperature_FT_Disc::preparer_pas_de_temps(void)
 {
 }
 
+int Convection_Diffusion_Temperature_FT_Disc::get_phase() const
+{
+  return phase_;
+}
 void Convection_Diffusion_Temperature_FT_Disc::corriger_pas_de_temps(double dt)
 {
 }
