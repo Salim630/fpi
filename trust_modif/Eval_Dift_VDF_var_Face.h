@@ -29,6 +29,7 @@
 #include <Ref_Turbulence_paroi_base.h>
 #include <Ref_Mod_turb_hyd_base.h>
 
+#include <Tool.h>
 //
 // .DESCRIPTION class Eval_Dift_VDF_var_Face
 //
@@ -340,8 +341,10 @@ inline double Eval_Dift_VDF_var_Face::flux_arete_interne(const DoubleTab& inco, 
   int elem3 = elem_(fac4,0);
   int elem4 = elem_(fac4,1);
 
-  double visc_lam = 0.25*(dv_diffusivite(elem1) + dv_diffusivite(elem2)
-                          +dv_diffusivite(elem3) + dv_diffusivite(elem4));
+  //double visc_lam = 0.25*(dv_diffusivite(elem1) + dv_diffusivite(elem2)
+  //                        +dv_diffusivite(elem3) + dv_diffusivite(elem4));
+
+  double visc_lam=Tool::calcMyViscLam(elem1,elem2,elem3,elem4); // penderation harmonique via l'indicatrice interpolee a l'arete
   double visc_turb = 0.25*(dv_diffusivite_turbulente(elem1) + dv_diffusivite_turbulente(elem2)
                            +dv_diffusivite_turbulente(elem3) + dv_diffusivite_turbulente(elem4));
 

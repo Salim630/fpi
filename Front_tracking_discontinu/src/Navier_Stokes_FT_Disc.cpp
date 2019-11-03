@@ -43,7 +43,7 @@
 #include <Matrice_Morse_Sym.h>
 #include <Matrice_Bloc.h>
 #include <Param.h>
-
+#include <Tool.h>
 
 Implemente_instanciable_sans_constructeur_ni_destructeur(Navier_Stokes_FT_Disc,"Navier_Stokes_FT_Disc",Navier_Stokes_Turbulent);
 
@@ -168,6 +168,9 @@ static void FT_disc_calculer_champs_rho_mu_nu_dipha(const Zone_dis_base&      zo
   double mu = 0.;
   const int formule_mu = fluide.formule_mu();
 
+  Tool::setMyMuPhase0(mu_phase_0);
+  Tool::setMyMuPhase1(mu_phase_1);
+  Tool::setMyIndic(indicatrice_elem);
   // Calcul de rho, nu, mu aux elements
   {
     const int n = indicatrice_elem.size();
