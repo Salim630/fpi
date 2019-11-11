@@ -12,12 +12,27 @@
 #include <string.h>
 #include <string>
 
+#include <Ref_Zone_VDF.h>
+#include <Zone_VDF.h>
 
+#include <Zone_VF.h>
+#include <Ref_Zone_VF.h>
 
 class Tool {
 public:
     static  std::string myCode;
-private:
+    static REF(Zone_VDF)    ma_zone_VDF_;
+    static REF(Zone_VF)    myZone_vf_;
+
+    static DoubleTab myVitesse; //vitesse discritise
+    static DoubleTab myVitesseFaces;
+    static  DoubleTab& myCalculer_vitesse_faces(DoubleTab& v_faces_stockage); //vitesse aux faces
+    static void print_doubletab(const DoubleTab& v_faces_stockage, Nom nom_fichier );
+    static DoubleTab myVitesseSommets; //vitesse aux sommets
+
+    static double myTime;
+
+
     static double myMuPhase1;
     static double myMuPhase0;
     static DoubleVect myIndic;

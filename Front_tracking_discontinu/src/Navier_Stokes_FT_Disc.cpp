@@ -45,6 +45,8 @@
 #include <Param.h>
 #include <Tool.h>
 
+
+
 Implemente_instanciable_sans_constructeur_ni_destructeur(Navier_Stokes_FT_Disc,"Navier_Stokes_FT_Disc",Navier_Stokes_Turbulent);
 
 Implemente_ref(Navier_Stokes_FT_Disc);
@@ -1763,6 +1765,65 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
   }
 
   vpoint = 0.;
+// HMS : puit de forage Zone_VDF------------- //
+
+  Tool::ma_zone_VDF_ = ref_cast(Zone_VDF, zone_dis().valeur());
+  Tool::myZone_vf_ = ref_cast(Zone_VF, zone_dis().valeur());
+
+
+
+  Tool::myVitesse= la_vitesse.valeurs();
+
+  const Zone_VDF& myZone_VDF = Tool::ma_zone_VDF_.valeur();
+
+  Cerr<< Tool::ma_zone_VDF_.que_suis_je() << " "<< Tool::myVitesse.que_suis_je()<<" "<<finl;
+
+
+  //REF(Navier_Stokes_std) ns;
+  //const Navier_Stokes_std& ns = ref_cast(Navier_Stokes_std, equation());
+
+//..           ..                  ..                   ..
+
+
+  DoubleTab vitesse_faces_stockage;
+  const DoubleTab& vitesse_faces = Tool::myCalculer_vitesse_faces(vitesse_faces_stockage);
+
+  Tool::print_doubletab(Tool::myVitesse, "vitesse_disc.txt");
+  Tool::print_doubletab(vitesse_faces, "vitesse_faces.txt");
+  Tool::print_doubletab(Tool::myVitesseSommets,"vitesse_sommets.txt" );
+  //Tool::print_doubletab(Tool::myIndic,"indicatrice.txt" );
+  const DoubleTab& indic = variables_internes().ref_eq_interf_proprietes_fluide.valeur().inconnue().valeur().valeurs();
+  Tool::print_doubletab(indic, "indicatrice.txt"); //HMS
+  //..           ..                  ..                   ..
+  // print face and all
+  {
+
+    Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
+    //const Zone& ma_zone = zone_dis().zone ();
+
+    int nb_fac=zone_vf.nb_faces();
+    int nb_som_pface=zone_vf.nb_som_face();
+    const IntVect ori=zone_vf.orientation();
+    for(int fac=0; fac<nb_fac; fac++)
+      {
+        Cerr<<fac<<"\t";
+        for(int som=0; som<nb_som_pface; som++)
+          {
+            int sommet=zone_vf.face_sommets(fac,som);
+            Cerr<<sommet<<"\t";
+          }
+        Cerr <<ori(fac)<< "\t"<<zone_vf.face_voisins(fac,0)<< "\t"<<zone_vf.face_voisins(fac,1) <<finl;
+      }
+
+
+
+  }
+
+
+
+  Cerr<< vitesse_faces.que_suis_je() << " "<<finl;
+  Cerr<< myZone_VDF.que_suis_je() <<finl;
+// ----------------------------------//
 
   // =====================================================================
   // Methode de projection :
@@ -1777,8 +1838,11 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
   //                div (mu * (grad(v)+tr(grad(v))))
   //                (on a associe "mu" a la "diffusivite" de l'operateur,
   //                 voir Navier_Stokes_FT_Disc::lire)
+  Cerr<< " 		!! on calcule les flux difussif ici !! "<<finl;
   terme_diffusif.calculer(la_vitesse.valeurs(),
                           variables_internes().terme_diffusion.valeur().valeurs());
+  Cerr<< " 		!! fin du calcule des flux diffusif !! "<<finl;
+
   solveur_masse.appliquer(variables_internes().terme_diffusion.valeur().valeurs());
 
   // Termes sources : gravite et tension de surface,

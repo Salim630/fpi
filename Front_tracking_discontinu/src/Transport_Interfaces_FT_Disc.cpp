@@ -62,6 +62,8 @@
 #include <Domaine.h>
 #include <DoubleTrav.h>
 
+#include <Tool.h>
+
 Implemente_instanciable_sans_constructeur_ni_destructeur(Transport_Interfaces_FT_Disc,"Transport_Interfaces_FT_Disc",Transport_Interfaces_base);
 
 Implemente_ref(Transport_Interfaces_FT_Disc);
@@ -7422,12 +7424,12 @@ void Transport_Interfaces_FT_Disc::calculer_distance_interface_sommets(
 {
   static const double distance_sommets_invalides = -1.e30;
 
-  const Zone_VF&    zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
-  const IntTab&     elem_som = zone_vf.zone().les_elems();
+  const Zone_VF&    zone_vf = ref_cast(Zone_VF, zone_dis().valeur()); //on remplie la reference pour utiliser la zone vf
+  const IntTab&     elem_som = zone_vf.zone().les_elems(); // Renvoie le tableau des sommets des elements
   const DoubleTab& xp = zone_vf.xp();
   const DoubleTab& coord_som = zone_vf.zone().domaine().les_sommets();
 
-  const int nb_sommets = dist_som.dimension_tot(0);
+  const int nb_sommets = dist_som.dimension_tot(0); //64
   ArrOfInt ncontrib(nb_sommets);
   ncontrib = 0;
   dist_som = 0.;
@@ -7683,6 +7685,8 @@ void Transport_Interfaces_FT_Disc::calculer_distance_interface(
           }
       }
     normale_elements.echange_espace_virtuel();//Manque cet echange (MB)
+    Tool::setMyNormaleInterfaceElem(normale_elements);//HMS
+    Tool::print_doubletab(Tool::myNormaleInterfaceElem,"normalinterfaces.txt" );//HMS
   }
   // Calcul d'une distance a l'interface :
   terme_src = distance_elements;
