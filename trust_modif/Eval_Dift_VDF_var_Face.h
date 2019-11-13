@@ -341,7 +341,9 @@ inline double Eval_Dift_VDF_var_Face::flux_arete_interne(const DoubleTab& inco, 
   int elem3 = elem_(fac4,0);
   int elem4 = elem_(fac4,1);
 
-
+  const int dim = 3;
+  // la somme des trois orientaion = 3, pour trouver la deuxieme on fait 3 - les deux autre
+  int oria = 3-ori1-ori3;
 
   const Zone_VF& zvf = Tool::myZone_vf_;
   const DoubleTab& v_fac=Tool::myVitesseFaces;
@@ -395,61 +397,51 @@ inline double Eval_Dift_VDF_var_Face::flux_arete_interne(const DoubleTab& inco, 
   double som1=som_art[0];
   double som2=som_art[1];
 
-
-  double dist =0;
-  for (int i=0; i<3; i++)
-    {
-      double tmp =coord_som(som2,i)-coord_som(som1,i);
-      tmp*=tmp;
-      dist+=tmp;
-    }
-  dist=sqrt(dist);
-  //------------
-
-
   //remplissage du vecteur distance (delta x)
-  double dx[3];
-  dx[0]=dist_face(fac1,fac2,ori3);
-  dx[1]=dist_face(fac3,fac4,ori1);
-  dx[2]=dist;
-
-  // vecteur des orientations
-  //pour a voir la derrniere orientation celle de l'arete, on fait somme des orientatioin (3 en 3D) - somme des deux orientation connue :
-  int oria=3-ori1-ori3;
-  int ori[3]= {ori1,ori3,oria};   // ori[0] et ori[1] interchangable, parcontre ori[2]= orientation de l'arete, toujours
+  double dx[dim];
+  dx[ori1]=dist_face(fac3,fac4,ori1);
+  dx[ori3]=dist_face(fac1,fac2,ori3);
+  dx[oria]=coord_som(som2,oria)-coord_som(som1,oria);
 
 
   //remplissage du tableau des diffrences de vitesse delta U
   // compo pour vitesse u,v,w et
-  DoubleTab du(3,3);
-  for(int compo =0; compo<3; compo++)
+  DoubleTab du(dim,dim);
+  for(int compo =0; compo<dim; compo++)
     {
-      du(compo,ori[0])=v_fac(fac4,compo)-v_fac(fac3,compo);  // coresspendance avec l'orientation des distances
-      du(compo,ori[1])=v_fac(fac2,compo)-v_fac(fac1,compo);  //
-      du(compo,ori[2])=v_som(som2,compo)-v_som(som1,compo);  //
+      du(compo,ori1)=v_fac(fac4,compo)-v_fac(fac3,compo);  // coresspendance avec l'orientation des distances
+      du(compo,ori3)=v_fac(fac2,compo)-v_fac(fac1,compo);  //
+      du(compo,oria)=v_som(som2,compo)-v_som(som1,compo);  //
     }
 
-
 //remplisage du tableau aux 9 derivee en 3D
-  DoubleTab dudx(3,3);
-  for(int compo =0; compo<3; compo++)
+  DoubleTab dudx(dim,dim);
+  for(int compo =0; compo<dim; compo++)
     {
-      for(int n=0; n<3; n++)
+      for(int o=0; o<dim; o++)
         {
-          dudx(compo, ori[n]) = du(compo, ori[n]) / dx[ori[n]]; //
+          dudx(compo, o) = du(compo, o) / dx[o]; //
         }
     }
 
 
   // remplissage du vecteur de normale
-  double n[3];
+  double norme=0, i_norme=0, n[dim];
   DoubleTab n_elem = Tool::myNormaleInterfaceElem;
 
-  for (int compo = 0; compo < 3; compo++)
+  for (int compo = 0; compo < dim; compo++)
     {
       // interpolation des composante de la normal a l'arete
       n[compo] =  0.25*(n_elem(elem1,compo) + n_elem(elem2,compo) +n_elem(elem3,compo) + n_elem(elem4,compo));
+      norme+= n[compo] * n[compo];
     }
+  //normalisation de la normale a l'arete
+  i_norme=1./sqrt(norme);
+  for (int compo = 0; compo < dim ; compo++)
+    {
+      n[compo]*=i_norme;
+    }
+
 
 
 // calcule de tau_c en trois partie  tau_c=t1+t2+t3 avec
@@ -458,12 +450,12 @@ inline double Eval_Dift_VDF_var_Face::flux_arete_interne(const DoubleTab& inco, 
 //t3=-2*(duk/dxm+dum/dxk)*nx*nm*ni*nj
 
   double t1=0, t2=0, t3=0, tau_c=0;
-  for (int k = 0; k < 3 ; k++)
+  for (int k = 0; k < dim ; k++)
     {
       t1+=( dudx(ori3,k) + dudx(k,ori3) )*n[k]*n[ori1];
       t2+=( dudx(ori1,k) + dudx(k,ori1) )*n[k]*n[ori3];
 
-      for (int l = 0; l < 3 ; l++)
+      for (int l = 0; l < dim ; l++)
         {
           t3+=-2*( dudx(k,l) + dudx(l,k)  )*n[k]*n[l]*n[ori3]*n[ori1];
         }
@@ -477,11 +469,11 @@ inline double Eval_Dift_VDF_var_Face::flux_arete_interne(const DoubleTab& inco, 
   double mu_a, mu_h;
   Tool::calcMyVisc_areteInterne(elem1,elem2,elem3,elem4,mu_a,mu_h);
 
-  double visc_lam=mu_a; // penderation harmonique via l'indicatrice interpolee a l'arete
+  double visc_lam=mu_a; // ponderation aritmetique via l'indicatrice interpolee a l'arete
   double visc_turb = 0.25*(dv_diffusivite_turbulente(elem1) + dv_diffusivite_turbulente(elem2)
                            +dv_diffusivite_turbulente(elem3) + dv_diffusivite_turbulente(elem4));
 
-  double tau = (inco[fac4]-inco[fac3])/dist_face(fac3,fac4,ori1); //dui/dxj=du/dz
+  double tau = (inco[fac4]-inco[fac3])/dist_face(fac3,fac4,ori1); //dui/dxj=du/dz (dudx(ori3,ori1)
   double tau_tr = (inco[fac2]-inco[fac1])/dist_face(fac1,fac2,ori3);  //duj/dxi=dw/dx
   double reyn = (tau + tau_tr)*visc_turb;
 
@@ -495,7 +487,8 @@ inline double Eval_Dift_VDF_var_Face::flux_arete_interne(const DoubleTab& inco, 
   //         *(porosite(fac1)+porosite(fac2));
 
   //validation :
-  if(fac1 == 93 && fac2==94 && fac3== 56 && fac4== 62 && Tool::myNiter==1)
+// if(fac1 == 93 && fac2==94 && fac3== 56 && fac4== 62 && Tool::myNiter==1)
+  if(fac1 == 93 && fac2==94 && fac3== 56 && fac4== 62)
     {
       //combine pour ne pas imprimer le temps 0, et faire une seul impression par pas de temps
 
@@ -510,43 +503,46 @@ inline double Eval_Dift_VDF_var_Face::flux_arete_interne(const DoubleTab& inco, 
       for (int j = 0; j < 4 ; j++)
         {
           Cerr <<j << "\t" <<fac[j] << "\t" << orientation(fac[j]) <<"\t" ;
-          for (int compo = 0; compo < 3; compo++)
+          for (int compo = 0; compo < dim; compo++)
             {
               Cerr << cf(fac[j],compo) << "\t"  ;
             }
 
-          for (int compo = 0; compo < 3; compo++)
+          for (int compo = 0; compo < dim; compo++)
             {
               Cerr  << v_fac(fac[j],compo) <<"\t" ;
             }
           Cerr << finl;
         }
       //sommets
+      Cerr << finl;
 
       for (int j = 0; j < 2 ; j++)
         {
-          Cerr <<j << "\t" <<som_art[j] << "\t" << ori[2] <<"\t" ;
-          for (int compo = 0; compo < 3; compo++)
+          Cerr <<j << "\t" <<som_art[j] << "\t" << oria <<"\t" ;
+          for (int compo = 0; compo < dim; compo++)
             {
               Cerr << coord_som(som_art[j],compo) << "\t"  ;
             }
 
-          for (int compo = 0; compo < 3; compo++)
+          for (int compo = 0; compo < dim; compo++)
             {
               Cerr  << v_som(som_art[j],compo) <<"\t" ;
             }
           Cerr << finl;
         }
       //--
-
+      Cerr << finl;
 
       // donnes des normales
-      Cerr <<"nx:\t" << n_elem(elem1,0)<<"\t"<< n_elem(elem2,0)<<"\t"<< n_elem(elem3,0)<<"\t"<< n_elem(elem4,0)<<"\t"<<n[0]<< finl;
-      Cerr <<"ny:\t" << n_elem(elem1,1)<<"\t"<< n_elem(elem2,1)<<"\t"<< n_elem(elem3,1)<<"\t"<< n_elem(elem4,1)<<"\t"<<n[1]<< finl;
-      Cerr <<"nz:\t" << n_elem(elem1,2)<<"\t"<< n_elem(elem2,2)<<"\t"<< n_elem(elem3,2)<<"\t"<< n_elem(elem4,2)<<"\t"<<n[2]<< finl;
+      Cerr << n_elem(elem1,0)<<"\t"<< n_elem(elem2,0)<<"\t"<< n_elem(elem3,0)<<"\t"<< n_elem(elem4,0)<<"\t"<<n[0]<< finl;
+      Cerr << n_elem(elem1,1)<<"\t"<< n_elem(elem2,1)<<"\t"<< n_elem(elem3,1)<<"\t"<< n_elem(elem4,1)<<"\t"<<n[1]<< finl;
+      Cerr << n_elem(elem1,2)<<"\t"<< n_elem(elem2,2)<<"\t"<< n_elem(elem3,2)<<"\t"<< n_elem(elem4,2)<<"\t"<<n[2]<< finl;
       double moy_indic = 0.25*(Tool::myIndic(elem1)+Tool::myIndic(elem2)+Tool::myIndic(elem3)+Tool::myIndic(elem4));
-      Cerr <<"indic:\t" << Tool::myIndic(elem1)<<"\t"<<Tool::myIndic(elem2)<<"\t"<<Tool::myIndic(elem3)<<"\t"<<Tool::myIndic(elem4)<<"\t"<<moy_indic<< finl;
+      Cerr << Tool::myIndic(elem1)<<"\t"<<Tool::myIndic(elem2)<<"\t"<<Tool::myIndic(elem3)<<"\t"<<Tool::myIndic(elem4)<<"\t"<<moy_indic<< finl;
+      Cerr << finl;
 
+      Cerr <<"norme:\t"<< norme<<finl;
       Cerr <<"T1:\t"<< t1<<finl;
       Cerr <<"T2:\t"<< t2<<finl;
       Cerr <<"T3:\t"<< t3<<finl;
@@ -1171,11 +1167,11 @@ inline double Eval_Dift_VDF_var_Face::flux_fa7_elem(const DoubleTab& inco, int e
   double t1=0, t2=0, tau_c=0;
   for (int k = 0; k < dim ; k++)
     {
-      t1+=( dudx(ori,k) + dudx(k,ori) )*n[k]*n[ori];
+      t1+=2*( dudx(ori,k) + dudx(k,ori) )*n[k]*n[ori];
 
       for (int m = 0; m < dim ; m++)
         {
-          t2+=-1*( dudx(k,m) + dudx(m,k)  )*n[k]*n[m]*n[ori]*n[ori];
+          t2+=-2*( dudx(k,m) + dudx(m,k)  )*n[k]*n[m]*n[ori]*n[ori];
         }
     }
   tau_c=t1+t2;
@@ -1189,9 +1185,9 @@ inline double Eval_Dift_VDF_var_Face::flux_fa7_elem(const DoubleTab& inco, int e
   double mu_a, mu_h;
   Tool::calcMyVisc_fa7Elem(elem, mu_a, mu_h);
   //---
-  flux = (-reyn + mu_a*tau+(mu_h-mu_a)*tau_c) * surf ;
+  flux = (-reyn + mu_a*2*tau+(mu_h-mu_a)*tau_c) * surf ;
 
-  if(elem==3 && fac1==39 &&fac2==93 && Tool::myNiter==1)
+  if(elem==3 && fac1==39 &&fac2==93 )
     {
       //  //impression pour verification
 //// donnees relatif aux faces
