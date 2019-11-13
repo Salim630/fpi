@@ -912,7 +912,7 @@ inline double Eval_Dift_VDF_var_Face::flux_fa7_elem(const DoubleTab& inco, int e
   // On verifie que les termes diagonaux du tenseur de reynolds sont bien positifs
   // Sinon on annulle :
   if (reyn < 0) reyn=0. ;
-  flux = (-reyn + dv_diffusivite(elem)*tau) * surf ;
+  flux = (-reyn + 2*dv_diffusivite(elem)*tau) * surf ;
   return flux;
 }
 
