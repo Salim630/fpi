@@ -470,11 +470,14 @@ inline double Eval_Dift_VDF_var_Face::flux_arete_interne(const DoubleTab& inco, 
     }
   tau_c=t1+t2+t3;
 
-  Cerr<<tau_c<<finl;
+  //Cerr<<tau_c<<finl;
+  // old expression
   //double visc_lam = 0.25*(dv_diffusivite(elem1) + dv_diffusivite(elem2)
   //                        +dv_diffusivite(elem3) + dv_diffusivite(elem4));
+  double mu_a, mu_h;
+  Tool::calcMyVisc_areteInterne(elem1,elem2,elem3,elem4,mu_a,mu_h);
 
-  double visc_lam=Tool::calcMyViscLam(elem1,elem2,elem3,elem4); // penderation harmonique via l'indicatrice interpolee a l'arete
+  double visc_lam=mu_a; // penderation harmonique via l'indicatrice interpolee a l'arete
   double visc_turb = 0.25*(dv_diffusivite_turbulente(elem1) + dv_diffusivite_turbulente(elem2)
                            +dv_diffusivite_turbulente(elem3) + dv_diffusivite_turbulente(elem4));
 
@@ -482,7 +485,7 @@ inline double Eval_Dift_VDF_var_Face::flux_arete_interne(const DoubleTab& inco, 
   double tau_tr = (inco[fac2]-inco[fac1])/dist_face(fac1,fac2,ori3);  //duj/dxi=dw/dx
   double reyn = (tau + tau_tr)*visc_turb;
 
-  flux = 0.25*(reyn + visc_lam*(tau+tau_tr))*(surface(fac1)+surface(fac2))
+  flux = 0.25*(reyn + visc_lam*(tau+tau_tr)+(mu_h-mu_a)*tau_c)*(surface(fac1)+surface(fac2))
          *(porosite(fac1)+porosite(fac2));
 
   // TODO: coder proprement la double ponderation de viscosite, et pourquoi pas la rondre compatible 2D
@@ -491,6 +494,70 @@ inline double Eval_Dift_VDF_var_Face::flux_arete_interne(const DoubleTab& inco, 
   //  flux = 0.25*(reyn + visc_lam*(tau+tau_tr)+(mu_h-mu_a)*tau_c)*(surface(fac1)+surface(fac2))
   //         *(porosite(fac1)+porosite(fac2));
 
+  //validation :
+  if(fac1 == 93 && fac2==94 && fac3== 56 && fac4== 62 && Tool::myNiter==1)
+    {
+      //combine pour ne pas imprimer le temps 0, et faire une seul impression par pas de temps
+
+      Cerr<< " \n je suis pass ici \n" <<finl;
+      Tool::print_doubletab(du,"du_arete.txt");
+      Tool::print_doubletab(dudx,"dudx_arete.txt");
+
+      //donne relatif aux somets
+      int fac[]= {fac1, fac2, fac3, fac4};
+      DoubleTab cf = zvf.xv();
+// faces
+      for (int j = 0; j < 4 ; j++)
+        {
+          Cerr <<j << "\t" <<fac[j] << "\t" << orientation(fac[j]) <<"\t" ;
+          for (int compo = 0; compo < 3; compo++)
+            {
+              Cerr << cf(fac[j],compo) << "\t"  ;
+            }
+
+          for (int compo = 0; compo < 3; compo++)
+            {
+              Cerr  << v_fac(fac[j],compo) <<"\t" ;
+            }
+          Cerr << finl;
+        }
+      //sommets
+
+      for (int j = 0; j < 2 ; j++)
+        {
+          Cerr <<j << "\t" <<som_art[j] << "\t" << ori[2] <<"\t" ;
+          for (int compo = 0; compo < 3; compo++)
+            {
+              Cerr << coord_som(som_art[j],compo) << "\t"  ;
+            }
+
+          for (int compo = 0; compo < 3; compo++)
+            {
+              Cerr  << v_som(som_art[j],compo) <<"\t" ;
+            }
+          Cerr << finl;
+        }
+      //--
+
+
+      // donnes des normales
+      Cerr <<"nx:\t" << n_elem(elem1,0)<<"\t"<< n_elem(elem2,0)<<"\t"<< n_elem(elem3,0)<<"\t"<< n_elem(elem4,0)<<"\t"<<n[0]<< finl;
+      Cerr <<"ny:\t" << n_elem(elem1,1)<<"\t"<< n_elem(elem2,1)<<"\t"<< n_elem(elem3,1)<<"\t"<< n_elem(elem4,1)<<"\t"<<n[1]<< finl;
+      Cerr <<"nz:\t" << n_elem(elem1,2)<<"\t"<< n_elem(elem2,2)<<"\t"<< n_elem(elem3,2)<<"\t"<< n_elem(elem4,2)<<"\t"<<n[2]<< finl;
+      double moy_indic = 0.25*(Tool::myIndic(elem1)+Tool::myIndic(elem2)+Tool::myIndic(elem3)+Tool::myIndic(elem4));
+      Cerr <<"indic:\t" << Tool::myIndic(elem1)<<"\t"<<Tool::myIndic(elem2)<<"\t"<<Tool::myIndic(elem3)<<"\t"<<Tool::myIndic(elem4)<<"\t"<<moy_indic<< finl;
+
+      Cerr <<"T1:\t"<< t1<<finl;
+      Cerr <<"T2:\t"<< t2<<finl;
+      Cerr <<"T3:\t"<< t3<<finl;
+      Cerr <<"indic:\t"<<moy_indic<<finl;
+      Cerr <<"mu_h\t"<<mu_h <<finl;
+      Cerr <<"mu_a\t"<<mu_a <<finl;
+      Cerr <<"tau:\t"<<tau <<finl;
+      Cerr <<"tau_tr:\t"<<tau_tr <<finl;
+      Cerr <<"tau_c:\t"<<tau_c <<finl;
+      Cerr <<"flux:\t"<<flux <<finl;
+    }
   return flux;
 }
 
@@ -1049,7 +1116,122 @@ inline double Eval_Dift_VDF_var_Face::flux_fa7_elem(const DoubleTab& inco, int e
   // On verifie que les termes diagonaux du tenseur de reynolds sont bien positifs
   // Sinon on annulle :
   if (reyn < 0) reyn=0. ;
-  flux = (-reyn + dv_diffusivite(elem)*tau) * surf ;
+
+
+  //HMS ----
+  const Zone_VF& zvf = Tool::myZone_vf_;
+
+
+  int const nb_fac_pElem =	6; // a  generaliser pour la 2D
+  const int dim =3;
+  double fac[nb_fac_pElem];
+  for (int i = 0; i < nb_fac_pElem; i++)
+    {
+      fac[i]=zvf.elem_faces(elem,i);
+    }
+
+  double dx[dim];
+  for (int o = 0; o < dim ; o++)
+    {
+      dx[o]= dist_face(fac[o],fac[o+dim],o) ;
+    }
+
+  const DoubleTab& v_fac=Tool::myVitesseFaces;
+
+  DoubleTab du(dim,dim); //du( compostante, orientation )
+
+  for (int o = 0; o < dim ; o++)
+    {
+      for(int compo =0; compo<dim; compo++)
+        {
+          du(compo,o)=v_fac(fac[o+dim],compo)-v_fac(fac[o],compo);  // coresspendance avec l'orientation des distances
+//
+        }
+    }
+//  Tool::print_doubletab(du,"du.txt");
+  //remplisage du tableau aux 9 derivee en 3D
+  DoubleTab dudx(dim,dim);
+  for(int compo =0; compo<dim; compo++)
+    {
+      for(int o=0; o<dim; o++)
+        {
+          dudx(compo, o) = du(compo, o) / dx[o]; //
+        }
+    }
+//  Tool::print_doubletab(dudx,"dudx.txt");
+  double n[dim];
+  DoubleTab n_elem = Tool::myNormaleInterfaceElem;
+
+  for (int compo = 0; compo < dim; compo++)
+    {
+      // interpolation des composante de la normal a l'arete
+      n[compo] =  n_elem(elem,compo);
+    }
+
+  double t1=0, t2=0, tau_c=0;
+  for (int k = 0; k < dim ; k++)
+    {
+      t1+=( dudx(ori,k) + dudx(k,ori) )*n[k]*n[ori];
+
+      for (int m = 0; m < dim ; m++)
+        {
+          t2+=-1*( dudx(k,m) + dudx(m,k)  )*n[k]*n[m]*n[ori]*n[ori];
+        }
+    }
+  tau_c=t1+t2;
+////
+///
+
+
+
+  //---
+  // Cerr <<tau_c <<finl;
+  double mu_a, mu_h;
+  Tool::calcMyVisc_fa7Elem(elem, mu_a, mu_h);
+  //---
+  flux = (-reyn + mu_a*tau+(mu_h-mu_a)*tau_c) * surf ;
+
+  if(elem==3 && fac1==39 &&fac2==93 && Tool::myNiter==1)
+    {
+      //  //impression pour verification
+//// donnees relatif aux faces
+      Tool::myOldTime=Tool::myTime;
+      Tool::print_doubletab(du,"du_fa7.txt");
+      Tool::print_doubletab(dudx,"dudx_fa7.txt");
+//
+      DoubleTab cf = zvf.xv();
+
+      for (int j = 0; j < 6 ; j++)
+        {
+          Cerr <<j<< "\t"<<fac[j] << "\t" << orientation(fac[j]) <<"\t" ;
+          for (int compo = 0; compo < 3; compo++)
+            {
+              Cerr << cf(fac[j],compo) << "\t" ;
+            }
+
+          for (int compo = 0; compo < 3; compo++)
+            {
+              Cerr << v_fac(fac[j],compo) <<"\t" ;
+            }
+
+          Cerr << finl;
+        }
+
+
+      // donnes des normales
+      Cerr <<"nx:\t" <<n[0]<< finl;
+      Cerr <<"ny:\t" <<n[1]<< finl;
+      Cerr <<"nz:\t" <<n[2]<< finl;
+      Cerr <<"T1:\t"<< t1<<finl;
+      Cerr <<"T2:\t"<< t2<<finl;
+      Cerr <<"indic:\t"<<Tool::myIndic(elem)<<finl;
+      Cerr <<"mu_h\t"<<mu_h <<finl;
+      Cerr <<"mu_a\t"<<mu_a <<finl;
+      Cerr <<"tau:\t"<<tau <<finl;
+      Cerr <<"tau_c:\t"<<tau_c <<finl;
+      Cerr <<"flux:\t"<<flux <<finl;
+
+    }
   return flux;
 }
 

@@ -6,7 +6,7 @@
 #include <Sortie_Fichier_base.h>
 
 //declaration des membre donnees
-std::string Tool::myCode="commicode 008dpv";
+std::string Tool::myCode="commicode 009dpv";
 
 double Tool::myMuPhase1=-1;
 double Tool::myMuPhase0=-1;
@@ -17,7 +17,8 @@ DoubleTab Tool::myVitesseSommets;
 DoubleTab Tool::myVitesseFaces;
 
 double Tool::myTime;
-
+double Tool::myOldTime=0.0;
+int Tool::myNiter=-1;
 
 REF(Zone_VDF)    Tool::ma_zone_VDF_;
 REF(Zone_VF)     Tool::myZone_vf_;
@@ -25,10 +26,10 @@ REF(Zone_VF)     Tool::myZone_vf_;
 //implementation des membre fonctions
 
 //utilitaire
+// penderation harmonique de la viscosié a l'arete
 double Tool::calcMyViscLam(int elem1,int elem2, int elem3, int elem4){
 
-	  double indicArete = 0.25*(myIndic[elem1] + myIndic[elem2]
-	                            +myIndic[elem3] + myIndic[elem4]);
+	  double indicArete = 0.25*(myIndic[elem1] + myIndic[elem2] +myIndic[elem3] + myIndic[elem4]);
 
 	  double myViscLam  = (myMuPhase0 * myMuPhase1)/(myMuPhase1 - indicArete * ( myMuPhase1 - myMuPhase0));
 
@@ -38,6 +39,38 @@ double Tool::calcMyViscLam(int elem1,int elem2, int elem3, int elem4){
 
 	return myViscLam;
 }
+
+void Tool::calcMyVisc_areteInterne(int elem1,int elem2, int elem3, int elem4, double& mu_a, double& mu_h) {
+
+    double indicArete = 0.25 * (myIndic[elem1] + myIndic[elem2]
+                                + myIndic[elem3] + myIndic[elem4]);
+
+    // ponderation aritmetique
+     mu_a = indicArete * (myMuPhase1 - myMuPhase0) + myMuPhase0;
+    // ponderation harmonique
+     mu_h = (myMuPhase0 * myMuPhase1) / (myMuPhase1 - indicArete * (myMuPhase1 - myMuPhase0));
+
+    //printf("elem{1,2,3,4} ={%d|%d|%d|%d}\n",elem1,elem2,elem3,elem4);
+    //printf("indic{1,2,3,4={%f|%f|%f|%f}\n",myIndic[elem1],myIndic[elem2],myIndic[elem3],myIndic[elem4]);
+    //printf("indic arete=%f; mu0=%f, mu1=%f, visclam=%f\n", indicArete,myMuPhase0,myMuPhase1,myViscLam);
+
+}
+
+void Tool::calcMyVisc_fa7Elem(int elem, double& mu_a, double& mu_h) {
+
+    double indicArete = myIndic[elem];
+
+    // ponderation aritmetique
+    mu_a = indicArete * (myMuPhase1 - myMuPhase0) + myMuPhase0;
+    // ponderation harmonique
+    mu_h = (myMuPhase0 * myMuPhase1) / (myMuPhase1 - indicArete * (myMuPhase1 - myMuPhase0));
+
+    //printf("elem{1,2,3,4} ={%d|%d|%d|%d}\n",elem1,elem2,elem3,elem4);
+    //printf("indic{1,2,3,4={%f|%f|%f|%f}\n",myIndic[elem1],myIndic[elem2],myIndic[elem3],myIndic[elem4]);
+    //printf("indic arete=%f; mu0=%f, mu1=%f, visclam=%f\n", indicArete,myMuPhase0,myMuPhase1,myViscLam);
+
+}
+
 // setters and getters
 double Tool::getMyMuPhase1() {
     return myMuPhase1;

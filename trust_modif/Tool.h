@@ -31,19 +31,20 @@ public:
     static DoubleTab myVitesseSommets; //vitesse aux sommets
 
     static double myTime;
-
+    static double myOldTime;
 
     static double myMuPhase1;
     static double myMuPhase0;
     static DoubleVect myIndic;
     static DoubleTab myNormaleInterfaceElem;
-
+    static int myNiter;
 
 public:
 
     //Utilitaire
     static double calcMyViscLam(int elem1,int elem2, int elem3, int elem4);  //calcule de visclam a l'arrette avec ponderation harmonique
-
+    static void   calcMyVisc_areteInterne(int elem1,int elem2, int elem3, int elem4, double& mu_a, double& mu_h); // renvois les deux ponderation
+    static void   calcMyVisc_fa7Elem(int elem, double& mu_a, double& mu_h); // renvois les deux ponderation pour
     //Setters and Getters
 
     static const DoubleVect &getMyIndic();
