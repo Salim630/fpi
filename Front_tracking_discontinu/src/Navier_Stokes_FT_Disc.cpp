@@ -44,6 +44,8 @@
 #include <Matrice_Bloc.h>
 #include <Param.h>
 #include <Tool.h>
+#include <Connex_components_FT.h>
+#include <communications.h>
 
 Implemente_instanciable_sans_constructeur_ni_destructeur(Navier_Stokes_FT_Disc,"Navier_Stokes_FT_Disc",Navier_Stokes_Turbulent);
 
@@ -81,6 +83,7 @@ public:
   Champ_Fonc terme_convection;
   Champ_Fonc terme_source;
   Champ_Fonc terme_source_interfaces;
+  Champ_Fonc terme_source_collisions;
   Champ_Fonc indicatrice_p1b;
   Champ_Fonc gradient_indicatrice;
   Champ_Fonc potentiel_faces;
@@ -1306,6 +1309,75 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_superficielles(const Maillage_
   }
 }
 
+void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions()
+{
+
+  REF(Transport_Interfaces_FT_Disc) & refeq_transport = variables_internes().ref_eq_interf_proprietes_fluide;
+  const Transport_Interfaces_FT_Disc& eq_transport = refeq_transport.valeur();
+  const Maillage_FT_Disc& maillage = eq_transport.maillage_interface();
+
+  DoubleTab positions;
+  const int nb_facettes=maillage.nb_facettes();
+  ArrOfInt compo_connexes_facettes(nb_facettes); // Init a zero
+
+  int n = search_connex_components_local_FT(maillage, compo_connexes_facettes); //
+  int nb_compo_tot=compute_global_connex_components_FT(maillage, compo_connexes_facettes, n); //
+
+  positions.resize(nb_compo_tot,dimension);
+  //const Maillage_FT_Disc& maillage=?;
+  //const ArrOfInt& compo_connexes_facettes=?;
+  //const int nb_compo_tot=;
+
+
+// calcule des centre de gravite pour les composantes
+  assert(nb_compo_tot == positions.dimension(0));
+
+  const int dim = positions.dimension(1); //
+  const ArrOfDouble& surface_facettes = maillage.get_update_surface_facettes();
+  const IntTab& facettes = maillage.facettes();
+  const DoubleTab& sommets = maillage.sommets();
+  assert(facettes.dimension(1) == dim);
+
+  // Surface totale de chaque composante connexe, initialise a zero
+  ArrOfDouble surfaces_compo(nb_compo_tot);
+  positions = 0.;
+
+  // Calcul du centre de gravite de la composante connexe
+  //  (centre de gravite de la surface, pas du volume)
+  const int nb_facettes_tot = facettes.dimension_tot(0);
+  {
+    for (int i = 0; i < nb_facettes_tot; i++)
+      {
+        if (maillage.facette_virtuelle(i))
+          continue;
+        const int compo = compo_connexes_facettes[i];
+        const double surface = surface_facettes[i];
+        surfaces_compo[compo] += surface;
+        // Centre de gravite de la facette, pondere par la surface
+        for (int j = 0; j < dim; j++)
+          {
+            // Indice du sommet
+            const int s = facettes(i, j);
+            for (int k = 0; k < dim; k++)
+              // On divisera par dim a la fin:
+              positions(compo, k) += surface * sommets(s, k);
+          }
+      }
+    mp_sum_for_each_item(surfaces_compo);
+    mp_sum_for_each_item(positions);
+
+    positions *= (1. / dim);
+
+    DoubleVect s; // tab_divide prend DoubleVect, pas ArrOfDouble...
+    s.ref_array(surfaces_compo);
+    tab_divide_any_shape(positions, s);
+  }
+  Cerr<<positions(0,1);
+  //ArrOfDouble rayons_compo(nb_compo_tot);
+  //ArrOfDouble volumes_compo(nb_compo_tot);
+  //double epsilon, dist_act;
+  //DESTINATION
+}
 // Description:
 //  Calcul du gradient de l'indicatrice.
 //  Ce gradient est utilise pour calculer le second membre de l'equation de qdm,
@@ -1821,6 +1893,7 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
   }
   solveur_masse.appliquer(variables_internes().terme_source_interfaces.valeur().valeurs());
 
+  calculer_champ_forces_collisions();
   // Autres termes sources (acceleration / repere mobile)
   //  Valeurs homogenes a
   //                                             / d       \          //
