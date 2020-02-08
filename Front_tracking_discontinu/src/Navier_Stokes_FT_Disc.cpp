@@ -1309,12 +1309,12 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_superficielles(const Maillage_
   }
 }
 
-void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions()
+void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const Maillage_FT_Disc& maillage)
 {
 
-  REF(Transport_Interfaces_FT_Disc) & refeq_transport = variables_internes().ref_eq_interf_proprietes_fluide;
-  const Transport_Interfaces_FT_Disc& eq_transport = refeq_transport.valeur();
-  const Maillage_FT_Disc& maillage = eq_transport.maillage_interface();
+  //REF(Transport_Interfaces_FT_Disc) & refeq_transport = variables_internes().ref_eq_interf_proprietes_fluide;
+  //const Transport_Interfaces_FT_Disc& eq_transport = refeq_transport.valeur();
+  //const Maillage_FT_Disc& maillage = eq_transport.maillage_interface();
 
   DoubleTab positions;
   const int nb_facettes=maillage.nb_facettes();
@@ -1372,11 +1372,76 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions()
     s.ref_array(surfaces_compo);
     tab_divide_any_shape(positions, s);
   }
-  Cerr<<positions(0,1);
-  //ArrOfDouble rayons_compo(nb_compo_tot);
-  //ArrOfDouble volumes_compo(nb_compo_tot);
-  //double epsilon, dist_act;
-  //DESTINATION
+  //Cerr<<positions(0,1);
+  ArrOfDouble rayons_compo(nb_compo_tot);
+  ArrOfDouble volumes_compo(nb_compo_tot);
+
+  //calcule du rayon et du volume pour chaque composante
+  for (int compo = 0; compo < nb_compo_tot ; compo++)
+    {
+      rayons_compo(compo)=sqrt(surfaces_compo(compo)/(4*3.14));
+      volumes_compo(compo)=rayons_compo(compo)*surfaces_compo(compo)/3;
+    }
+
+// position des bord
+  int nb_bord = 2*dimension;
+
+  DoubleTab positions_bords(nb_bord);
+  positions_bords(0)=0.;
+  positions_bords(1)=6e-3;
+  positions_bords(2)=0.;
+  positions_bords(3)=18e-3;
+  if(dimension==3)
+    {
+      positions_bords(4)=0.;
+      positions_bords(5)=6e-3;
+    }
+// parametre du modele
+  double epsilon =1., dist_act =0.5e-3;
+
+// initialisation des forces de collision
+  DoubleTab forces_parois(nb_compo_tot,dimension);
+  DoubleTab forces_particules(nb_compo_tot,dimension);
+  DoubleTab forces_collisions(nb_compo_tot,dimension);
+
+  for (int compo = 0; compo <nb_compo_tot ; compo++)
+    {
+      for (int d = 0; d < dimension; d++)
+        {
+          //contribution des bords
+          for (int b = 0; b <nb_bord ; b++)
+            {
+              if(b/2==d)
+                {
+                  double dist_cg= positions(compo,d)-positions_bords(b);
+                  double dist_int =abs(dist_cg)-rayons_compo(compo);
+                  double fac=max(0.,-(dist_int-dist_act));
+                  forces_parois(compo,d)+=(dist_cg)*fac/epsilon;
+                }
+              else
+                {
+                  forces_parois(compo,d)+=0;
+                }
+
+            }
+          //contribution des particules
+          for (int parti = compo+1; parti < nb_compo_tot; parti++)
+            {
+              forces_particules(compo,d)+=0;
+            }
+
+          forces_collisions(compo,d)=forces_parois(compo,d)+forces_particules(compo,d);
+          forces_collisions(compo,d)=forces_collisions(compo,d)/volumes_compo(compo);
+        }
+      Cerr<<"la distance est : " << abs(positions(compo,1)-positions_bords(2))-rayons_compo(0) <<" la force de collision suivant y est : "<<forces_collisions(0,1)<< "\n";
+    }
+
+  // DoubleTab& valeurs_champ_forces = champ_forces.valeurs();
+  // //VDF (1 composante par face)
+  // valeurs_champ_forces(face) = 0;
+  // valeurs_champ_forces.echange_espace_virtuel();
+
+
 }
 // Description:
 //  Calcul du gradient de l'indicatrice.
@@ -1704,7 +1769,7 @@ void Navier_Stokes_FT_Disc::calculer_delta_u_interface(Champ_base& champ_u0,
   {
     const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
     const IntTab&   face_voisins = zone_vf.face_voisins();
-    const int nb_faces = zone_vf.nb_faces();;
+    const int nb_faces = zone_vf.nb_faces();
     for (int i = 0; i < nb_faces; i++)
       {
         for (int j = 0; j < 2; j++)
@@ -1885,6 +1950,10 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
                                              variables_internes().potentiel_elements,
                                              variables_internes().potentiel_faces,
                                              variables_internes().terme_source_interfaces);
+
+        // calcule du terme source du au collisions  //--------------------------------
+//        variables_internes().terme_source_collisions.valeurs() = 0;
+        calculer_champ_forces_collisions(maillage);
       }
     else
       {
@@ -1892,8 +1961,11 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
       }
   }
   solveur_masse.appliquer(variables_internes().terme_source_interfaces.valeur().valeurs());
+// solveur_masse.appliquer(variables_internes().terme_source_collisions.valeur().valeurs());
 
-  calculer_champ_forces_collisions();
+
+
+
   // Autres termes sources (acceleration / repere mobile)
   //  Valeurs homogenes a
   //                                             / d       \          //
@@ -1927,6 +1999,7 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
   const DoubleVect& volumes_entrelaces = ref_cast(Zone_VF, zone_dis().valeur()).volumes_entrelaces();
   const DoubleTab& tab_diffusion = variables_internes().terme_diffusion.valeur().valeurs();
   const DoubleTab& termes_sources_interf = variables_internes().terme_source_interfaces.valeur().valeurs();
+  //const DoubleTab& termes_sources_collisions = variables_internes().terme_source_collisions.valeur().valeurs();
   const DoubleTab& termes_sources = variables_internes().terme_source.valeur().valeurs();
   const DoubleTab& tab_convection = variables_internes().terme_convection.valeur().valeurs();
   const int n = vpoint.dimension(0);
