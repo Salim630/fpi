@@ -46,6 +46,7 @@
 #include <Tool.h>
 #include <Connex_components_FT.h>
 #include <communications.h>
+#include <Connex_components.h>
 
 Implemente_instanciable_sans_constructeur_ni_destructeur(Navier_Stokes_FT_Disc,"Navier_Stokes_FT_Disc",Navier_Stokes_Turbulent);
 
@@ -1309,12 +1310,12 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_superficielles(const Maillage_
   }
 }
 
-void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const Maillage_FT_Disc& maillage)
+void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& indicatrice, DoubleTab& valeurs_champ)
 {
 
-  //REF(Transport_Interfaces_FT_Disc) & refeq_transport = variables_internes().ref_eq_interf_proprietes_fluide;
-  //const Transport_Interfaces_FT_Disc& eq_transport = refeq_transport.valeur();
-  //const Maillage_FT_Disc& maillage = eq_transport.maillage_interface();
+  REF(Transport_Interfaces_FT_Disc) & refeq_transport = variables_internes().ref_eq_interf_proprietes_fluide;
+  const Transport_Interfaces_FT_Disc& eq_transport = refeq_transport.valeur();
+  const Maillage_FT_Disc& maillage = eq_transport.maillage_interface();
 
   DoubleTab positions;
   const int nb_facettes=maillage.nb_facettes();
@@ -1383,10 +1384,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const Maillage_FT_D
       volumes_compo(compo)=rayons_compo(compo)*surfaces_compo(compo)/3;
     }
 
-// position des bord
+// position des bord a generaliser
   int nb_bord = 2*dimension;
-
-  DoubleTab positions_bords(nb_bord);
+  ArrOfDouble positions_bords(nb_bord);
   positions_bords(0)=0.;
   positions_bords(1)=6e-3;
   positions_bords(2)=0.;
@@ -1396,9 +1396,11 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const Maillage_FT_D
       positions_bords(4)=0.;
       positions_bords(5)=6e-3;
     }
-// parametre du modele
-  double epsilon =1., dist_act =0.5e-3;
 
+
+// parametre du modele -------------------------------------------
+  double  dist_act =0.5e-3, epsilon_b =1e-3, epsilon_p =1e-2;
+//-----------------------------------------------------------------
 // initialisation des forces de collision
   DoubleTab forces_parois(nb_compo_tot,dimension);
   DoubleTab forces_particules(nb_compo_tot,dimension);
@@ -1416,7 +1418,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const Maillage_FT_D
                   double dist_cg= positions(compo,d)-positions_bords(b);
                   double dist_int =abs(dist_cg)-rayons_compo(compo);
                   double fac=max(0.,-(dist_int-dist_act));
-                  forces_parois(compo,d)+=(dist_cg)*fac/epsilon;
+                  forces_parois(compo,d)+=(dist_cg)*fac*fac/epsilon_b;
                 }
               else
                 {
@@ -1427,20 +1429,76 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const Maillage_FT_D
           //contribution des particules
           for (int parti = compo+1; parti < nb_compo_tot; parti++)
             {
-              forces_particules(compo,d)+=0;
+              //distance entre centre de gravite
+              double dist_cg =0;
+              for (int j=0; j<dimension; j++)
+                {
+                  double tmp =positions(compo,j)-positions(parti,j);
+                  tmp*=tmp;
+                  dist_cg+=tmp;
+                }
+              dist_cg=sqrt(dist_cg);
+              double dist_int =abs(dist_cg)-(rayons_compo(compo)+rayons_compo(parti));
+              double fac=max(0.,-(dist_int-dist_act));
+              forces_particules(compo,d)+=(positions(compo,d)-positions(parti,d))*fac*fac/epsilon_p;
             }
-
           forces_collisions(compo,d)=forces_parois(compo,d)+forces_particules(compo,d);
-          forces_collisions(compo,d)=forces_collisions(compo,d)/volumes_compo(compo);
         }
-      Cerr<<"la distance est : " << abs(positions(compo,1)-positions_bords(2))-rayons_compo(0) <<" la force de collision suivant y est : "<<forces_collisions(0,1)<< "\n";
+      //Cerr<<"la distance est : " << abs(positions(compo,1)-positions_bords(2))-rayons_compo(0) <<" la force de collision suivant y est : "<<forces_collisions(0,1)<< "\n";
     }
 
-  // DoubleTab& valeurs_champ_forces = champ_forces.valeurs();
-  // //VDF (1 composante par face)
-  // valeurs_champ_forces(face) = 0;
-  // valeurs_champ_forces.echange_espace_virtuel();
 
+  const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
+  const int nb_elem = zone_vf.zone().nb_elem();
+  const int nb_faces = zone_vf.nb_faces();
+  IntVect num_compo;
+  zone_vf.zone().creer_tableau_elements(num_compo);
+  int indic_phase_solide = 0; // a generaliser
+
+
+  {
+    for (int elem = 0; elem < nb_elem; elem++)
+      {
+
+        num_compo[elem] = (indicatrice[elem] != indic_phase_solide) ? -1 : 1;
+      }
+  }
+  num_compo.echange_espace_virtuel();
+
+  const IntTab& elem_faces = zone_vf.elem_faces();
+  const IntTab& faces_elem = zone_vf.face_voisins();
+  //const DoubleTab& cgf=zone_vf.xv();
+  const int nb_local_connex_components = search_connex_components_local(elem_faces, faces_elem, num_compo);
+  const int nb_connex_components = compute_global_connex_components(num_compo, nb_local_connex_components);
+
+  Cerr << " found " << nb_connex_components << " connex components" << finl;
+
+
+  valeurs_champ.resize(nb_faces);
+  for (int elem = 0; elem <nb_elem ; elem++)
+    {
+      int compo = num_compo(elem);
+      if (compo != -1)
+        {
+          //Cerr << finl << elem << " " << indicatrice[elem] << " " << compo << " ";
+          //Cerr <<forces_collisions(compo,0) <<"|"<< forces_collisions(compo,1) <<"|"<<forces_collisions(compo,2) << finl;
+          for (int ori = 0; ori < dimension; ori++)
+            {
+              int fac1 =elem_faces(elem,ori);
+              int fac2 =elem_faces(elem,ori+dimension);
+              valeurs_champ(fac1)=forces_collisions(compo,ori);
+              valeurs_champ(fac2)=forces_collisions(compo,ori);
+              //Cerr << "  "<<fac1 << " " << cgf(fac1,0) <<"|" << cgf(fac1,1) <<"|" << cgf(fac1,2) << "  " << forces_collisions(compo,ori)<< finl;
+              //Cerr << "  "<<fac2 << " " << cgf(fac2,0) <<"|" << cgf(fac2,1) <<"|" << cgf(fac2,2) << "  " << forces_collisions(compo,ori)<< finl;
+            }
+        }
+      //Cerr << finl << elem << " " << indicatrice[elem] << " " << compo << " "  ;
+      //if (compo != -1)
+      //  {
+      //    Cerr <<forces_particules(compo,0) <<"|"<< forces_particules(compo,1) <<"|"<<forces_particules(compo,2);
+      //  }
+      valeurs_champ.echange_espace_virtuel();
+    }
 
 }
 // Description:
@@ -1923,7 +1981,7 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
   //                                             / d             \    //
   //                INTEGRALE                    | -- (rho * v)  |    //
   //                (sur le volume de controle)  \ dt            /    //
-
+  DoubleTab terme_source_collisions; // -----------------
   {
     // Si une equation de transport est associee aux proprietes du fluide,
     // on ajoute le terme de tension de surface.
@@ -1953,7 +2011,7 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
 
         // calcule du terme source du au collisions  //--------------------------------
 //        variables_internes().terme_source_collisions.valeurs() = 0;
-        calculer_champ_forces_collisions(maillage);
+        calculer_champ_forces_collisions(indicatrice.valeurs(),terme_source_collisions);
       }
     else
       {
@@ -1961,7 +2019,7 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
       }
   }
   solveur_masse.appliquer(variables_internes().terme_source_interfaces.valeur().valeurs());
-// solveur_masse.appliquer(variables_internes().terme_source_collisions.valeur().valeurs());
+  solveur_masse.appliquer(terme_source_collisions);
 
 
 
@@ -2151,7 +2209,7 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
     {
       const double rho_face = tab_rho_faces(i);
       if (nbdim1)
-        vpoint(i) = ( - flag_gradP(i) * gradP(i) + flag_diff * tab_diffusion(i) + coef_TSF(i) * termes_sources_interf(i) ) / rho_face
+        vpoint(i) = ( - flag_gradP(i) * gradP(i) + flag_diff * tab_diffusion(i) + coef_TSF(i) * termes_sources_interf(i) + terme_source_collisions(i) ) / rho_face
                     + tab_convection(i) + termes_sources(i) + gravite_face(i);
       else
         {
