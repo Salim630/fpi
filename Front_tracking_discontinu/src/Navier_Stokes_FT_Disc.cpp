@@ -1377,12 +1377,15 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& i
   //Cerr<<positions(0,1);
   ArrOfDouble rayons_compo(nb_compo_tot);
   ArrOfDouble volumes_compo(nb_compo_tot);
+  ArrOfDouble masse_compo(nb_compo_tot);
+  double rho_solide =2;
 
   //calcule du rayon et du volume pour chaque composante
   for (int compo = 0; compo < nb_compo_tot ; compo++)
     {
       rayons_compo(compo)=sqrt(surfaces_compo(compo)/(4*3.14));
       volumes_compo(compo)=rayons_compo(compo)*surfaces_compo(compo)/3;
+      masse_compo(compo) = volumes_compo(compo)*rho_solide;
     }
 
 // position des bord a generaliser
@@ -1401,15 +1404,20 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& i
 // ---debut calcule force de collision pour chaque composante
 
 // parametre du modele -------------------------------------------
-  double  dist_act =0.5e-3, epsilon_b =1e-5, epsilon_p =1e-5;
+  double  dist_act =0.5e-3, epsilon =1e-5, ed =0.9;
+  int Nc = 8;
 //-----------------------------------------------------------------
 // initialisation des forces de collision
   DoubleTab forces_parois(nb_compo_tot,dimension);
   DoubleTab forces_particules(nb_compo_tot,dimension);
   DoubleTab forces_collisions(nb_compo_tot,dimension);
 
+  const double dt = schema_temps().pas_de_temps();
+
   for (int compo = 0; compo <nb_compo_tot ; compo++)
     {
+      double raideur = ( masse_compo(compo) *( 3.14*3.14 + pow(log(ed),2) ) )/pow(Nc*dt,2) ;
+
       for (int d = 0; d < dimension; d++)
         {
           //contribution des bords
@@ -1419,9 +1427,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& i
               if(b/2==d)
                 {
                   double dist_cg= positions(compo,d)-positions_bords(b);
-                  double dist_int =abs(dist_cg)-rayons_compo(compo);
-                  double fac=max( 0.,(dist_act-dist_int) );
-                  forces_parois(compo,d)+=(dist_cg)*fac*fac/epsilon_b;
+                  double dist_int =abs(dist_cg)- 2e-3;
+                  //double fac=max( 0.,(dist_act-dist_int) );
+                  forces_parois(compo,d)+=(dist_int <= 0) ? -raideur*abs(dist_int) : 0;
                 }
               else
                 {
@@ -1443,10 +1451,12 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& i
               dist_cg=sqrt(dist_cg);
               double dist_int =abs(dist_cg)-(rayons_compo(compo)+rayons_compo(parti));
               double fac=max( 0.,(dist_act-dist_int) );
-              forces_particules(compo,d)+=(positions(compo,d)-positions(parti,d))*fac*fac/epsilon_p;
+              forces_particules(compo,d)+=(positions(compo,d)-positions(parti,d))*fac*fac/epsilon;
             }
           forces_collisions(compo,d)=forces_parois(compo,d)+forces_particules(compo,d);
+
         }
+      Cerr <<"(!!) dist= "<< positions(compo,1)-positions_bords(2)-rayons_compo(compo)<<"  F=  " <<forces_collisions(compo,0) <<"|"<< forces_collisions(compo,1) <<"|"<<forces_collisions(compo,2);
       //Cerr<<"la distance est : " << abs(positions(compo,1)-positions_bords(2))-rayons_compo(0) <<" la force de collision suivant y est : "<<forces_collisions(0,1)<< "\n";
     }
 // ---fin calcule force de collision pour chaque composante
