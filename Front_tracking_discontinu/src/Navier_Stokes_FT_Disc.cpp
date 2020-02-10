@@ -1372,6 +1372,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& i
     DoubleVect s; // tab_divide prend DoubleVect, pas ArrOfDouble...
     s.ref_array(surfaces_compo);
     tab_divide_any_shape(positions, s);
+    //---fin calcul surface_compo et position_centre_gravite_compo ( a rassembler dans une focntion)---//
   }
   //Cerr<<positions(0,1);
   ArrOfDouble rayons_compo(nb_compo_tot);
@@ -1385,6 +1386,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& i
     }
 
 // position des bord a generaliser
+// important : remplire de la maniere suivant , X1,X2,Y1,Y2[,Z1,Z2].
   int nb_bord = 2*dimension;
   ArrOfDouble positions_bords(nb_bord);
   positions_bords(0)=0.;
@@ -1396,10 +1398,10 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& i
       positions_bords(4)=0.;
       positions_bords(5)=6e-3;
     }
-
+// ---debut calcule force de collision pour chaque composante
 
 // parametre du modele -------------------------------------------
-  double  dist_act =0.5e-3, epsilon_b =1e-3, epsilon_p =1e-2;
+  double  dist_act =0.5e-3, epsilon_b =1e-5, epsilon_p =1e-5;
 //-----------------------------------------------------------------
 // initialisation des forces de collision
   DoubleTab forces_parois(nb_compo_tot,dimension);
@@ -1413,11 +1415,12 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& i
           //contribution des bords
           for (int b = 0; b <nb_bord ; b++)
             {
+              // les bord sont perpondiculaire a la direction considere ?
               if(b/2==d)
                 {
                   double dist_cg= positions(compo,d)-positions_bords(b);
                   double dist_int =abs(dist_cg)-rayons_compo(compo);
-                  double fac=max(0.,-(dist_int-dist_act));
+                  double fac=max( 0.,(dist_act-dist_int) );
                   forces_parois(compo,d)+=(dist_cg)*fac*fac/epsilon_b;
                 }
               else
@@ -1429,9 +1432,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& i
           //contribution des particules
           for (int parti = compo+1; parti < nb_compo_tot; parti++)
             {
-              //distance entre centre de gravite
+              //distance entre les centre de gravites des particules
               double dist_cg =0;
-              for (int j=0; j<dimension; j++)
+              for (int j=0; j < dimension; j++)
                 {
                   double tmp =positions(compo,j)-positions(parti,j);
                   tmp*=tmp;
@@ -1439,28 +1442,30 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& i
                 }
               dist_cg=sqrt(dist_cg);
               double dist_int =abs(dist_cg)-(rayons_compo(compo)+rayons_compo(parti));
-              double fac=max(0.,-(dist_int-dist_act));
+              double fac=max( 0.,(dist_act-dist_int) );
               forces_particules(compo,d)+=(positions(compo,d)-positions(parti,d))*fac*fac/epsilon_p;
             }
           forces_collisions(compo,d)=forces_parois(compo,d)+forces_particules(compo,d);
         }
       //Cerr<<"la distance est : " << abs(positions(compo,1)-positions_bords(2))-rayons_compo(0) <<" la force de collision suivant y est : "<<forces_collisions(0,1)<< "\n";
     }
+// ---fin calcule force de collision pour chaque composante
 
-
+// -- Application de la force de collision aux faces euleriennes correspandantes a chaque composante
   const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
+  const DoubleVect& volumes_entrelaces = zone_vf.volumes_entrelaces();
   const int nb_elem = zone_vf.zone().nb_elem();
   const int nb_faces = zone_vf.nb_faces();
   IntVect num_compo;
   zone_vf.zone().creer_tableau_elements(num_compo);
-  int indic_phase_solide = 0; // a generaliser
+  int indic_phase_fluide = 1; // a generaliser
 
 
   {
     for (int elem = 0; elem < nb_elem; elem++)
       {
-
-        num_compo[elem] = (indicatrice[elem] != indic_phase_solide) ? -1 : 1;
+        // marquage des element fluide par -1
+        num_compo[elem] = (indicatrice[elem] == indic_phase_fluide) ? -1 : 1;
       }
   }
   num_compo.echange_espace_virtuel();
@@ -1470,24 +1475,31 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& i
   //const DoubleTab& cgf=zone_vf.xv();
   const int nb_local_connex_components = search_connex_components_local(elem_faces, faces_elem, num_compo);
   const int nb_connex_components = compute_global_connex_components(num_compo, nb_local_connex_components);
-
+// num_compo contient le numero de compo de chaque element
   Cerr << " found " << nb_connex_components << " connex components" << finl;
 
 
   valeurs_champ.resize(nb_faces);
+  // boucle sur les elements du domaine
   for (int elem = 0; elem <nb_elem ; elem++)
     {
+      //selection du numero de la particule qui contien l'element
       int compo = num_compo(elem);
+      // c'est bien une phase purment solid ?
       if (compo != -1)
         {
           //Cerr << finl << elem << " " << indicatrice[elem] << " " << compo << " ";
           //Cerr <<forces_collisions(compo,0) <<"|"<< forces_collisions(compo,1) <<"|"<<forces_collisions(compo,2) << finl;
+
+          // boucle sur les direction du repere cartesien
           for (int ori = 0; ori < dimension; ori++)
             {
+              // Selection des des face perpondiculaire a la direction ori
               int fac1 =elem_faces(elem,ori);
               int fac2 =elem_faces(elem,ori+dimension);
-              valeurs_champ(fac1)=forces_collisions(compo,ori);
-              valeurs_champ(fac2)=forces_collisions(compo,ori);
+              // remplissage du champ de force au faces du domaine
+              valeurs_champ(fac1)=volumes_entrelaces(fac1)*forces_collisions(compo,ori);
+              valeurs_champ(fac2)=volumes_entrelaces(fac2)*forces_collisions(compo,ori);
               //Cerr << "  "<<fac1 << " " << cgf(fac1,0) <<"|" << cgf(fac1,1) <<"|" << cgf(fac1,2) << "  " << forces_collisions(compo,ori)<< finl;
               //Cerr << "  "<<fac2 << " " << cgf(fac2,0) <<"|" << cgf(fac2,1) <<"|" << cgf(fac2,2) << "  " << forces_collisions(compo,ori)<< finl;
             }
@@ -1495,7 +1507,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions( const DoubleTab& i
       //Cerr << finl << elem << " " << indicatrice[elem] << " " << compo << " "  ;
       //if (compo != -1)
       //  {
-      //    Cerr <<forces_particules(compo,0) <<"|"<< forces_particules(compo,1) <<"|"<<forces_particules(compo,2);
+      //    Cerr <<forces_collisions(compo,0) <<"|"<< forces_collisions(compo,1) <<"|"<<forces_collisions(compo,2);
       //  }
       valeurs_champ.echange_espace_virtuel();
     }
