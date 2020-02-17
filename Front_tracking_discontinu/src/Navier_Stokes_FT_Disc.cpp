@@ -1310,302 +1310,335 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_superficielles(const Maillage_
   }
 }
 
-void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab &indicatrice, DoubleTab &valeurs_champ)
+void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& indicatrice, DoubleTab& valeurs_champ)
 {
 
-    REF(Transport_Interfaces_FT_Disc) &refeq_transport = variables_internes().ref_eq_interf_proprietes_fluide;
-    const Transport_Interfaces_FT_Disc &eq_transport = refeq_transport.valeur();
-    const Maillage_FT_Disc &maillage = eq_transport.maillage_interface();
+  REF(Transport_Interfaces_FT_Disc) &refeq_transport = variables_internes().ref_eq_interf_proprietes_fluide;
+  const Transport_Interfaces_FT_Disc& eq_transport = refeq_transport.valeur();
+  const Maillage_FT_Disc& maillage = eq_transport.maillage_interface();
 
-    DoubleTab &positions = eq_transport.getPositionsCompo();
-    DoubleTab &vitesses = eq_transport.getVitessesCompo();
-    // DoubleTab positions;
-    const int nb_facettes = maillage.nb_facettes();
-    ArrOfInt compo_connexes_facettes(nb_facettes); // Init a zero
+  // recuperation des vitesse compo et des centres de gravites
+  DoubleTab& positions = eq_transport.getPositionsCompo();
+  DoubleTab& vitesses = eq_transport.getVitessesCompo();
 
-    int n = search_connex_components_local_FT(maillage, compo_connexes_facettes); //
-    int nb_compo_tot = compute_global_connex_components_FT(maillage, compo_connexes_facettes, n); //
 
-    // si vitesses na pas les bonnes dimension (premiere pas de temps, en calcule la position des centre de gravite et
-    // on initialise les vitesse des inclusion a zero
-    if ((vitesses.dimension(0) != nb_compo_tot) || (vitesses.dimension(1) != dimension))
+  const int nb_facettes = maillage.nb_facettes();
+  ArrOfInt compo_connexes_facettes(nb_facettes); // Init a zero
+  int n = search_connex_components_local_FT(maillage, compo_connexes_facettes); //
+  int nb_compo_tot = compute_global_connex_components_FT(maillage, compo_connexes_facettes, n); //
+
+  // si vitesses na pas les bonnes dimension (premiere pas de temps, en calcule la position des centre de gravite et
+  // on initialise les vitesse des inclusion a zero
+  if ((vitesses.dimension(0) != nb_compo_tot) || (vitesses.dimension(1) != dimension))
     {
-        positions.resize(nb_compo_tot, dimension);
-        vitesses.resize(nb_compo_tot, dimension);
-        vitesses = 0;
-        // DoubleTab deplacement; //
-        //eq_transport.calculer_vmoy_composantes_connexes(maillage, compo_connexes_facettes, nb_compo_tot,deplacement,vitesses, positions);
+      positions.resize(nb_compo_tot, dimension);
+      vitesses.resize(nb_compo_tot, dimension);
+      vitesses = 0;
+      // DoubleTab deplacement; //
+      //eq_transport.calculer_vmoy_composantes_connexes(maillage, compo_connexes_facettes, nb_compo_tot,deplacement,vitesses, positions);
 
 
-        //const Maillage_FT_Disc& maillage=?;
-        //const ArrOfInt& compo_connexes_facettes=?;
-        //const int nb_compo_tot=;
+      //const Maillage_FT_Disc& maillage=?;
+      //const ArrOfInt& compo_connexes_facettes=?;
+      //const int nb_compo_tot=;
 
-        // calcule des centre de gravite pour les composantes
-        assert(nb_compo_tot == positions.dimension(0));
+      // calcule des centre de gravite pour les composantes
+      assert(nb_compo_tot == positions.dimension(0));
 
-        const int dim = positions.dimension(1); //
-        const ArrOfDouble &surface_facettes = maillage.get_update_surface_facettes();
-        const IntTab &facettes = maillage.facettes();
-        const DoubleTab &sommets = maillage.sommets();
-        assert(facettes.dimension(1) == dim);
+      const int dim = positions.dimension(1); //
+      const ArrOfDouble& surface_facettes = maillage.get_update_surface_facettes();
+      const IntTab& facettes = maillage.facettes();
+      const DoubleTab& sommets = maillage.sommets();
+      assert(facettes.dimension(1) == dim);
 
-        // Surface totale de chaque composante connexe, initialise a zero
-        ArrOfDouble surfaces_compo(nb_compo_tot);
-        positions = 0.;
+      // Surface totale de chaque composante connexe, initialise a zero
+      ArrOfDouble surfaces_compo(nb_compo_tot);
+      positions = 0.;
 
-        // Calcul du centre de gravite de la composante connexe
-        //  (centre de gravite de la surface, pas du volume)
-        const int nb_facettes_tot = facettes.dimension_tot(0);
-        {
-            for (int i = 0; i < nb_facettes_tot; i++)
-            {
-                if (maillage.facette_virtuelle(i)) continue;
+      // Calcul du centre de gravite de la composante connexe
+      //  (centre de gravite de la surface, pas du volume)
+      const int nb_facettes_tot = facettes.dimension_tot(0);
+      {
+        for (int i = 0; i < nb_facettes_tot; i++)
+          {
+            if (maillage.facette_virtuelle(i)) continue;
 
-                const int compo = compo_connexes_facettes[i];
-                const double surface = surface_facettes[i];
-                surfaces_compo[compo] += surface;
-                // Centre de gravite de la facette, pondere par la surface
-                for (int j = 0; j < dim; j++)
-                {
-                    // Indice du sommet
-                    const int s = facettes(i, j);
-                    for (int k = 0; k < dim; k++)
-                    {
-                        // On divisera par dim a la fin:
-                        positions(compo, k) += surface * sommets(s, k);
-                    }
-                }
-            }
-            mp_sum_for_each_item(surfaces_compo);
-            mp_sum_for_each_item(positions);
+            const int compo = compo_connexes_facettes[i];
+            const double surface = surface_facettes[i];
+            surfaces_compo[compo] += surface;
+            // Centre de gravite de la facette, pondere par la surface
+            for (int j = 0; j < dim; j++)
+              {
+                // Indice du sommet
+                const int s = facettes(i, j);
+                for (int k = 0; k < dim; k++)
+                  {
+                    // On divisera par dim a la fin:
+                    positions(compo, k) += surface * sommets(s, k);
+                  }
+              }
+          }
+        mp_sum_for_each_item(surfaces_compo);
+        mp_sum_for_each_item(positions);
 
-            positions *= (1. / dim);
-            DoubleVect s; // tab_divide prend DoubleVect, pas ArrOfDouble...
-            s.ref_array(surfaces_compo);
-            tab_divide_any_shape(positions, s);
-            //---fin calcul surface_compo et position_centre_gravite_compo ( a rassembler dans une focntion)---//
-        }
+        positions *= (1. / dim);
+        DoubleVect s; // tab_divide prend DoubleVect, pas ArrOfDouble...
+        s.ref_array(surfaces_compo);
+        tab_divide_any_shape(positions, s);
+        //---fin calcul surface_compo et position_centre_gravite_compo ( a rassembler dans une focntion)---//
+      }
     }
 
 
+  //Cerr<<positions(0,1);
 
+  //  ----- proprietes particules  ----------
+  ArrOfDouble rayons_compo(nb_compo_tot);
+  ArrOfDouble volumes_compo(nb_compo_tot);
+  ArrOfDouble masse_compo(nb_compo_tot);
+  double rho_solide = 1000.;
 
-
-    //Cerr<<positions(0,1);
-    ArrOfDouble rayons_compo(nb_compo_tot);
-    ArrOfDouble volumes_compo(nb_compo_tot);
-    ArrOfDouble masse_compo(nb_compo_tot);
-    double rho_solide = 1000.;
-
-    //calcule du rayon et du volume pour chaque composante
-    for (int compo = 0; compo < nb_compo_tot; compo++)
+  //calcule du rayon et du volume pour chaque composante
+  for (int compo = 0; compo < nb_compo_tot; compo++)
     {
-        rayons_compo(compo) = 0.6e-3;
-        volumes_compo(compo) = 4 * 3.14 * rayons_compo(compo) * rayons_compo(compo) / 3;
-        masse_compo(compo) = volumes_compo(compo) * rho_solide;
+      rayons_compo(compo) = 0.6e-3;
+      volumes_compo(compo) = 4 * 3.14 * rayons_compo(compo) * rayons_compo(compo) / 3;
+      masse_compo(compo) = volumes_compo(compo) * rho_solide;
 
-        //rayons_compo(compo)=sqrt(surfaces_compo(compo)/(4*3.14));
-        //volumes_compo(compo)=rayons_compo(compo)*surfaces_compo(compo)/3;
-        //masse_compo(compo) = volumes_compo(compo)*rho_solide;
+      //rayons_compo(compo)=sqrt(surfaces_compo(compo)/(4*3.14));
+      //volumes_compo(compo)=rayons_compo(compo)*surfaces_compo(compo)/3;
+      //masse_compo(compo) = volumes_compo(compo)*rho_solide;
     }
+// -------------------------------------------------
 
-// position des bord a generaliser
+
+// ----------TODO generaliser avec les faces aux bords
 // important : remplire de la maniere suivant , X1,X2,Y1,Y2[,Z1,Z2].
-    int nb_bord = 2 * dimension;
-    ArrOfDouble positions_bords(nb_bord);
-    positions_bords(0) = -2.0e-3;
-    positions_bords(1) = 2.0e-3;
-    positions_bords(2) = 0.0e-3;
-    positions_bords(3) = 6.0e-3;
-    if (dimension == 3)
+  int nb_bord = 2 * dimension;
+  ArrOfDouble positions_bords(nb_bord);
+  positions_bords(0) = -2.0e-3;
+  positions_bords(1) = 2.0e-3;
+  positions_bords(2) = 0.0e-3;
+  positions_bords(3) = 6.0e-3;
+  if (dimension == 3)
     {
-        positions_bords(4) = -2.0e-3;
-        positions_bords(5) = 2.0e-3;
+      positions_bords(4) = -2.0e-3;
+      positions_bords(5) = 2.0e-3;
     }
 // ---debut calcule force de collision pour chaque composante
 
 // parametre du modele -------------------------------------------
-    double ed = 0.97;
-    int Nc = 8;
-
-
+  double ed = 0.97;
+  int Nc = 8;
 //-----------------------------------------------------------------
+
 // initialisation des forces de collision
-    DoubleTab forces_parois(nb_compo_tot, dimension);
-    DoubleTab forces_particules(nb_compo_tot, dimension);
-    DoubleTab forces_collisions(nb_compo_tot, dimension);
+  DoubleTab forces_parois(nb_compo_tot, dimension);
+  DoubleTab forces_particules(nb_compo_tot, dimension);
+  DoubleTab forces_collisions(nb_compo_tot, dimension);
 
-    const double dt = schema_temps().pas_de_temps();
+  const double dt = schema_temps().pas_de_temps();
 
-    for (int compo = 0; compo < nb_compo_tot; compo++)
+  for (int compo = 0; compo < nb_compo_tot; compo++)
     {
-        Cerr << "(!) compo: " << compo << finl;
-        double raideur_b = (rho_solide * (3.14 * 3.14 + pow(log(ed), 2))) / pow(Nc * dt, 2);
-        double amortis_b = (2 * rho_solide * log(ed)) / (Nc * dt);
+      Cerr << "(!) compo: " << compo << finl;
+      Cerr<<"P compo: "<< positions(compo, 0) <<"|" << positions(compo, 1) <<"|"<< positions(compo, 2) << finl;
+      Cerr<<"V compo: "<< vitesses(compo, 0) <<"|" << vitesses(compo, 1) <<"|"<< vitesses(compo, 2) << finl;
+      double raideur_b = (rho_solide * (3.14 * 3.14 + pow(log(ed), 2))) / pow(Nc * dt, 2);
+      double amortis_b = (2 * rho_solide * log(ed)) / (Nc * dt);
 
-        for (int d = 0; d < dimension; d++)
+      for (int d = 0; d < dimension; d++)
         {
-            Cerr << "vitesses_compo: " << vitesses(compo, d) << finl;
-            //contribution des bords
-            for (int b = 0; b < nb_bord; b++)
+          Cerr << "ori: " << d << finl;
+          //contribution des bords
+          for (int b = 0; b < nb_bord; b++)
             {
-                // les bord sont perpondiculaire a la direction considere ?
-                if (b / 2 == d)
+              // les bord sont perpondiculaire a la direction considere ?
+              if (b / 2 == d)  // TODO utiliser les orientations des faces a la place
                 {
-                    double dist_cg = positions(compo, d) - positions_bords(b);
-                    double dist_int = abs(dist_cg) - rayons_compo(compo);
-                    //Cerr << "  dist_cg (B) : "<< dist_cg << finl;
-                    //Cerr << "  dist_int (B) : "<< dist_int << finl;
-                    //double fac=max( 0.,(dist_act-dist_int) );
-                    double norm = dist_cg / abs(dist_cg);
-                    double F_spring = raideur_b * abs(dist_int) * norm;
-                    double F_dashpo = -amortis_b * abs(vitesses(compo, d)) * norm;
-                    forces_parois(compo, d) += (dist_int <= 0) ? F_spring + F_dashpo : 0;
+                  double dist_cg = positions(compo, d) - positions_bords(b);
+                  double dist_int = abs(dist_cg) - rayons_compo(compo);
+
+                  if (dist_int <= 0)
+                    {
+                      double norm_d = dist_cg / abs(dist_cg);
+                      double F_spring = raideur_b * abs(dist_int) * norm_d;
+                      double F_dashpo =  amortis_b * vitesses(compo, d) * norm_d;
+                      forces_parois(compo, d) +=  F_spring + F_dashpo ;
+
+                      Cerr << "dist_int(B): " << dist_int << " Fspring: " << F_spring << finl;
+                      Cerr << "Vint_b(B)=vitesses(compo, d): " << vitesses(compo, d) <<" amortis_b: "<< amortis_b<<
+                           " norm_d: " <<norm_d <<" F_dashpo: " << F_dashpo << finl;
+                    }
+                  //double fac=max( 0.,(dist_act-dist_int) );
                 }
-                else
+              else
                 {
-                    forces_parois(compo, d) += 0;
+                  forces_parois(compo, d) += 0;
                 }
 
             }
-            //contribution des particules
-            for (int parti = compo + 1; parti < nb_compo_tot; parti++)
+          //contribution des particules
+          for (int parti = compo + 1; parti < nb_compo_tot; parti++)
             {
-
-                //distance entre les centre de gravites des particules
-                double dist_cg = 0;
-                for (int j = 0; j < dimension; j++)
+              Cerr << " parti: " << parti << finl;
+              Cerr<<"P parti: "<< positions(parti, 0) <<"|" << positions(parti, 1) <<"|"<< positions(parti, 2) << finl;
+              Cerr<<"V parti: "<< vitesses(parti, 0) <<"|" << vitesses(parti, 1) <<"|"<< vitesses(parti, 2) << finl;
+              //distance entre les centre de gravites des particules
+              double dist_cg = 0;
+              for (int j = 0; j < dimension; j++)
                 {
-                    double tmp = positions(compo, j) - positions(parti, j);
-                    tmp *= tmp;
-                    dist_cg += tmp;
+                  double tmp = positions(compo, j) - positions(parti, j);
+                  tmp *= tmp;
+                  dist_cg += tmp;
                 }
-                dist_cg = sqrt(dist_cg);
-                double dist_int = abs(dist_cg) - (rayons_compo(compo) + rayons_compo(parti));
-                //Cerr << "  dist_cg (P) : "<< dist_cg << finl;
-                //Cerr << "  dist_int (P) : "<< dist_int << finl;
-                double me = 1 / (1 / masse_compo(compo) + 1 / masse_compo(parti));
-                double raideur_p = (me * (3.14 * 3.14 + pow(log(ed), 2))) / pow(Nc * dt, 2);
-                double amortis_p = (me * log(ed)) / (Nc * dt);
-                //double fac=max( 0.,(dist_act-dist_int) );
+              dist_cg = sqrt(dist_cg);
 
-                if (dist_int <= 0)
+              // distence entres les interfaces
+              double dist_int = abs(dist_cg) - (rayons_compo(compo) + rayons_compo(parti));
+              //Cerr << "  dist_cg (P) : "<< dist_cg << finl;
+              //Cerr << "  dist_int (P) : "<< dist_int << finl;
+
+              //double fac=max( 0.,(dist_act-dist_int) );
+
+              // collision ? ( superposition des interfaces )
+              if (dist_int <= 0)
                 {
-                    double Norm = (positions(compo, d) - positions(parti, d)) / dist_cg;
 
-                    double F_spring = -1 * raideur_p * dist_int * Norm / volumes_compo(compo);
-                    double F_dashpo =
-                            -1 * amortis_p * (vitesses(compo, d) - vitesses(parti, d) * Norm / volumes_compo(compo));
-                    double F = F_spring + F_dashpo;
-                    //Cerr << "  d : " << d <<" norm : " <<  Norm << " F : "<< F <<finl;
-                    forces_particules(compo, d) += +F;
-                    forces_particules(parti, d) += -F;
-                    //Cerr << " we are here now" << finl;
+                  double me = 1 / (1 / masse_compo(compo) + 1 / masse_compo(parti));
+                  double raideur_p = (me * (3.14 * 3.14 + pow(log(ed), 2))) / pow(Nc * dt, 2);
+                  double amortis_p = (me * log(ed)) / (Nc * dt);
+                  // projection de la vitesse relatives des centre de gravite sur la ligne reliant les centres
+                  double Norm_d = (positions(compo, d) - positions(parti, d)) / dist_cg;
+
+                  double prod =0;
+                  for (int j = 0; j < dimension; j++)
+                    {
+                      prod += 0.5 * (vitesses(compo, j) - vitesses(parti, j)) *  // TODO verifier d'ou sort le 0.5 ...
+                              (positions(compo, j) - positions(parti, j));
+                    }
+                  // composante "d" de la vitesse relative apres projection sur la normal
+                  double Vn_d =  (prod / dist_cg) * Norm_d;
+
+
+                  double F_spring = -1 * raideur_p * dist_int * Norm_d / volumes_compo(compo);
+                  double F_dashpo =  amortis_p * Vn_d / volumes_compo(compo);
+                  double F = F_spring + F_dashpo;
+
+                  Cerr << "dist_int(P): "<< dist_int << " Fspring: "<< F_spring << finl;
+                  Cerr << "Vint_b(P): "<< Vn_d << " F_dashpo: "<< F_dashpo << " amortis_b: " <<amortis_p<<
+                       " norm_d: " <<Norm_d <<" dt: " << dt << finl;
+                  //Cerr << "  d : " << d <<" norm : " <<  Norm << " F : "<< F <<finl;
+                  forces_particules(compo, d) += +F;
+                  forces_particules(parti, d) += -F;
+                  //Cerr << " we are here now" << finl;
                 }
 
             } // fin boucle parti
-            forces_collisions(compo, d) = forces_parois(compo, d) + forces_particules(compo, d);
-            Cerr << "  forces_parois(compo,d) : " << forces_parois(compo, d) << finl;
-            Cerr << "  forces_particules(compo,d) : " << forces_particules(compo, d) << finl;
+          forces_collisions(compo, d) = forces_parois(compo, d) + forces_particules(compo, d);
+          Cerr << "  forces_parois(compo,d) : " << forces_parois(compo, d) << finl;
+          Cerr << "  forces_particules(compo,d) : " << forces_particules(compo, d) << finl;
         } // fin boucle dimension
-        //Cerr <<"(!!) dist= "<< positions(compo,1)-positions_bords(2)-rayons_compo(compo)<<"  F=  " <<forces_collisions(compo,0) <<"|"<< forces_collisions(compo,1) <<"|"<<forces_collisions(compo,2);
-        //Cerr<<"la distance est : " << abs(positions(compo,1)-positions_bords(2))-rayons_compo(0) <<" la force de collision suivant y est : "<<forces_collisions(0,1)<< "\n";
+      //Cerr <<"(!!) dist= "<< positions(compo,1)-positions_bords(2)-rayons_compo(compo)<<"  F=  " <<forces_collisions(compo,0) <<"|"<< forces_collisions(compo,1) <<"|"<<forces_collisions(compo,2);
+      //Cerr<<"la distance est : " << abs(positions(compo,1)-positions_bords(2))-rayons_compo(0) <<" la force de collision suivant y est : "<<forces_collisions(0,1)<< "\n";
     } // fin boucle compo
 // ---fin calcule force de collision pour chaque composante
 
 
 
 // -- Application de la force de collision aux faces euleriennes correspandantes a chaque composante
-    const Zone_VF &zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
-    const DoubleVect &volumes_entrelaces = zone_vf.volumes_entrelaces();
-    const int nb_elem = zone_vf.zone().nb_elem();
-    const int nb_faces = zone_vf.nb_faces();
-    IntVect num_compo;
-    zone_vf.zone().creer_tableau_elements(num_compo);
-    int indic_phase_fluide = 1; // a generaliser
+  const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
+  const DoubleVect& volumes_entrelaces = zone_vf.volumes_entrelaces();
+  const int nb_elem = zone_vf.zone().nb_elem();
+  const int nb_faces = zone_vf.nb_faces();
+  IntVect num_compo;
+  zone_vf.zone().creer_tableau_elements(num_compo);
+  int indic_phase_fluide = 1; // a generaliser
 
 
-    {
-        for (int elem = 0; elem < nb_elem; elem++)
-        {
-            // marquage des element fluide par -1
-            // num_compo[elem] = (indicatrice[elem] == indic_phase_fluide) ? -1 : 1;
+  {
+    for (int elem = 0; elem < nb_elem; elem++)
+      {
+        // marquage des element fluide par -1
+        // num_compo[elem] = (indicatrice[elem] == indic_phase_fluide) ? -1 : 1;
 
-            // marquage des element fluide est diphasique  par -1
-            num_compo[elem] = (indicatrice[elem] != 1 - indic_phase_fluide) ? -1 : 1;
-        }
-    }
-    num_compo.echange_espace_virtuel();
+        // marquage des element fluide est diphasique  par -1
+        num_compo[elem] = (indicatrice[elem] != 1 - indic_phase_fluide) ? -1 : 1;
+      }
+  }
+  num_compo.echange_espace_virtuel();
 
-    const IntTab &elem_faces = zone_vf.elem_faces();
-    const IntTab &faces_elem = zone_vf.face_voisins();
-    const DoubleTab &cgf = zone_vf.xv();
-    const int nb_local_connex_components = search_connex_components_local(elem_faces, faces_elem, num_compo);
-    const int nb_connex_components = compute_global_connex_components(num_compo, nb_local_connex_components);
+  const IntTab& elem_faces = zone_vf.elem_faces();
+  const IntTab& faces_elem = zone_vf.face_voisins();
+  const DoubleTab& cgf = zone_vf.xv();
+  const int nb_local_connex_components = search_connex_components_local(elem_faces, faces_elem, num_compo);
+  const int nb_connex_components = compute_global_connex_components(num_compo, nb_local_connex_components);
 
 // a ce stade num_compo(elem) contient :
 // -1 si l'element est fluide pure.
 // NUM avec : 0 < Num < nb_connex_components, si l'element est solide ou biphasique.
 
-    if (nb_connex_components == 0)
+  if (nb_connex_components == 0)
     {
-        Cerr << " found " << nb_connex_components << " connex components" << finl;
+      Cerr << " found " << nb_connex_components << " connex components" << finl;
 
     }
 
-    valeurs_champ.resize(nb_faces);
-    // boucle sur les elements du domaine
-    for (int elem = 0; elem < nb_elem; elem++)
+  valeurs_champ.resize(nb_faces);
+  // boucle sur les elements du domaine
+  for (int elem = 0; elem < nb_elem; elem++)
     {
-        //selection du numero de la particule qui contien l'element
-        int compo = num_compo(elem);
+      //selection du numero de la particule qui contien l'element
+      int compo = num_compo(elem);
 
-        // elem est solide ou diphasique ? ( non fluide ?)
-        if (compo != -1)
+      // elem est solide ou diphasique ? ( non fluide ?)
+      if (compo != -1)
         {
-            //Cerr << finl << elem << " " << indicatrice[elem] << " " << compo << " ";
-            //Cerr <<forces_collisions(compo,0) <<"|"<< forces_collisions(compo,1) <<"|"<<forces_collisions(compo,2) << finl;
+          //Cerr << finl << elem << " " << indicatrice[elem] << " " << compo << " ";
+          //Cerr <<forces_collisions(compo,0) <<"|"<< forces_collisions(compo,1) <<"|"<<forces_collisions(compo,2) << finl;
 
-            // boucle sur les direction du repere cartesien
-            for (int ori = 0; ori < dimension; ori++)
+          // boucle sur les direction du repere cartesien
+          for (int ori = 0; ori < dimension; ori++)
             {
-                // Selection des des face perpondiculaire a la direction ori
-                int fac1 = elem_faces(elem, ori);
-                int fac2 = elem_faces(elem, ori + dimension);
-                // remplissage du champ de force au faces du domaine
-                valeurs_champ(fac1) =
-                        (1 - indicatrice[elem]) * volumes_entrelaces(fac1) * forces_collisions(compo, ori);
-                valeurs_champ(fac2) =
-                        (1 - indicatrice[elem]) * volumes_entrelaces(fac2) * forces_collisions(compo, ori);
+              // Selection des des face perpondiculaire a la direction ori
+              int fac1 = elem_faces(elem, ori);
+              int fac2 = elem_faces(elem, ori + dimension);
+              // remplissage du champ de force au faces du domaine
+              valeurs_champ(fac1) =
+                (1 - indicatrice[elem]) * volumes_entrelaces(fac1) * forces_collisions(compo, ori);
+              valeurs_champ(fac2) =
+                (1 - indicatrice[elem]) * volumes_entrelaces(fac2) * forces_collisions(compo, ori);
 
 
-                int cond = (-0.1e-3 < (cgf(fac1, 0)) && (cgf(fac1, 0) < 0.1e-3)) &&
-                           (-0.1e-3 < (cgf(fac1, 2)) && (cgf(fac1, 2) < 0.1e-3)) &&
-                           valeurs_champ(fac1) != 0 && ori == 1;
-                if (cond)
+              int cond = (-0.1e-3 < (cgf(fac1, 0)) && (cgf(fac1, 0) < 0.1e-3)) &&
+                         (-0.1e-3 < (cgf(fac1, 2)) && (cgf(fac1, 2) < 0.1e-3)) &&
+                         valeurs_champ(fac1) != 0 && ori == 1;
+              if (cond)
                 {
 
-                    Cerr << "(!!) fac: " << fac1 << "  y: " << cgf(fac1, 1) << "  compo: " << compo;
-                    Cerr << "  Fcollision(compo,ori): " << forces_collisions(compo, ori);
-                    Cerr << "  valeurs_champ(fac): " << valeurs_champ(fac1) << finl;
+                  Cerr << "(!!) fac: " << fac1 << "  y: " << cgf(fac1, 1) << "  compo: " << compo;
+                  Cerr << "  Fcollision(compo,ori): " << forces_collisions(compo, ori);
+                  Cerr << "  valeurs_champ(fac): " << valeurs_champ(fac1) << finl;
                 }
 
 
 
-                //Cerr << "  "<<fac2 << " " << cgf(fac2,0) <<"|" << cgf(fac2,1) <<"|" << cgf(fac2,2) << "  " << forces_collisions(compo,ori)<< finl;
+              //Cerr << "  "<<fac2 << " " << cgf(fac2,0) <<"|" << cgf(fac2,1) <<"|" << cgf(fac2,2) << "  " << forces_collisions(compo,ori)<< finl;
             }
         }
-        //Cerr << finl << elem << " " << indicatrice[elem] << " " << compo << " "  ;
-        //if (compo != -1)
-        //  {
-        //    Cerr <<forces_collisions(compo,0) <<"|"<< forces_collisions(compo,1) <<"|"<<forces_collisions(compo,2);
-        //  }
-        valeurs_champ.echange_espace_virtuel();
+      //Cerr << finl << elem << " " << indicatrice[elem] << " " << compo << " "  ;
+      //if (compo != -1)
+      //  {
+      //    Cerr <<forces_collisions(compo,0) <<"|"<< forces_collisions(compo,1) <<"|"<<forces_collisions(compo,2);
+      //  }
+      valeurs_champ.echange_espace_virtuel();
 
     }
-
+// fin
 }
+
+
+
 // Description:
 //  Calcul du gradient de l'indicatrice.
 //  Ce gradient est utilise pour calculer le second membre de l'equation de qdm,
@@ -2318,18 +2351,18 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
           vpoint(i) = ( - flag_gradP(i) * gradP(i) + flag_diff * tab_diffusion(i) + coef_TSF(i) * termes_sources_interf(i) + terme_source_collisions(i) ) / rho_face
                       + tab_convection(i) + termes_sources(i) + gravite_face(i);
 
-          const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
-          const DoubleTab& cgf=zone_vf.xv();
-          const Zone_VF& zone_vdf = ref_cast(Zone_VDF, zone_dis().valeur());
-          const IntVect& ori = zone_vdf.orientation();
-
-          int cond =    ( -0.1e-3 < (cgf(i,0) ) && (cgf(i,0) < 0.1e-3)) &&
-                        ( -0.1e-3 < (cgf(i,2) ) && (cgf(i,2) < 0.1e-3)) &&
-                        (ori(i) == 1) ;
-          if ( cond  )
-            {
-              Cerr << "fac  : " << i << "  y : " <<cgf(i,1) <<"  terme_source_collisions(fac) : "<< terme_source_collisions(i) <<finl;
-            }
+          //const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
+          //const DoubleTab& cgf=zone_vf.xv();
+          //const Zone_VF& zone_vdf = ref_cast(Zone_VDF, zone_dis().valeur());
+          //const IntVect& ori = zone_vdf.orientation();
+//
+          //int cond =    ( -0.1e-3 < (cgf(i,0) ) && (cgf(i,0) < 0.1e-3)) &&
+          //              ( -0.1e-3 < (cgf(i,2) ) && (cgf(i,2) < 0.1e-3)) &&
+          //              (ori(i) == 1) ;
+          //if ( cond  )
+          //  {
+          //    Cerr << "fac  : " << i << "  y : " <<cgf(i,1) <<"  terme_source_collisions(fac) : "<< terme_source_collisions(i) <<finl;
+          //  }
 
         }
       else
