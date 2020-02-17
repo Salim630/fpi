@@ -3506,8 +3506,8 @@ void Maillage_FT_Disc::deplacer_sommets(const ArrOfInt& liste_sommets_initiale,
   static DoubleTabFT deplacement_restant;
 
   //On reinitialise sommet_face_bord_  a -1 dans le cas des marqueurs (skip_facettes)
-  if (skip_facettes)
-    sommet_face_bord_ = -1;
+  //if (skip_facettes) // HMS : suppression des marquers de bords
+  sommet_face_bord_ = -1;
 
   liste_sommets = liste_sommets_initiale;
   {

@@ -260,14 +260,22 @@ public:
                        DoubleVect& flux,
                        DoubleVect& valeurs);
 
-protected:
-
   virtual void calculer_vmoy_composantes_connexes(const Maillage_FT_Disc& maillage,
                                                   const ArrOfInt& compo_connexes_facettes,
                                                   const int nb_compo_tot,
                                                   const DoubleTab& vitesse_sommets,
                                                   DoubleTab& vitesses,
                                                   DoubleTab& positions) const;
+  DoubleTab& getVitessesCompo() const;
+
+  DoubleTab& getPositionsCompo() const;
+
+
+protected:
+
+  //DoubleTab& vitesses_compo ;
+  //DoubleTab& positions_compo ;
+
 
   virtual void deplacer_maillage_ft_v_fluide(const double temps);
 
@@ -494,5 +502,9 @@ public:
   Topologie_Maillage_FT   topologie_interface_;
   // Cet objet est type en fonction de la discretisation:
   DERIV(Algorithmes_Transport_FT_Disc) algorithmes_transport_;
+
+  // HMS : variable pour stocker les vitesses et les positions du centre de gravite pour chaque inclusion
+  DoubleTab vitesses_compo;
+  DoubleTab positions_compo;
 };
 #endif

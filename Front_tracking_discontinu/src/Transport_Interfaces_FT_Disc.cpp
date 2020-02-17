@@ -1197,7 +1197,7 @@ Entree& Transport_Interfaces_FT_Disc::lire_cond_init(Entree& is)
                   }
               }
             Nom expression;
-            is >> expression;;
+            is >> expression;
             if (probleme().reprise_effectuee())
               {
                 Cerr << " Interface not build since a restarting is expected." << finl;
@@ -8105,6 +8105,11 @@ void Transport_Interfaces_FT_Disc::calculer_vmoy_composantes_connexes(const Mail
     s.ref_array(surfaces_compo);
     tab_divide_any_shape(vitesses, s);
   }
+
+  // HMS : recuperation des vitesses et des positions des centres
+
+  variables_internes_ -> vitesses_compo = vitesses;
+  variables_internes_ -> positions_compo = positions;
 }
 
 void Transport_Interfaces_FT_Disc::ramasse_miettes(const Maillage_FT_Disc& maillage,
@@ -8316,4 +8321,14 @@ void Transport_Interfaces_FT_Disc::transfert_conservatif_eulerien_vers_lagrangie
   maillage.desc_sommets().collecter_espace_virtuel(valeurs_lagrange, MD_Vector_tools::EV_SOMME);
   // Mise a jour des espaces virtuels :
   maillage.desc_sommets().echange_espace_virtuel(valeurs_lagrange);
+}
+
+DoubleTab& Transport_Interfaces_FT_Disc::getVitessesCompo() const
+{
+  return variables_internes_-> vitesses_compo;
+}
+
+DoubleTab& Transport_Interfaces_FT_Disc::getPositionsCompo() const
+{
+  return variables_internes_-> positions_compo;
 }

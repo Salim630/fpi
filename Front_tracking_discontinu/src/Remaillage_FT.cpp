@@ -1771,7 +1771,7 @@ int Remaillage_FT::supprimer_facettes_bord(Maillage_FT_Disc& maillage) const
 
           for (isom=1 ; isom<nb_som_par_facette ; isom++)
             {
-              facettes(fa7,isom) = facettes(fa7,0);
+              //facettes(fa7,isom) = facettes(fa7,0);
             }
         }
     }
