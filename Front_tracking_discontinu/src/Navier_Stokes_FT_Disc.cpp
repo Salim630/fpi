@@ -1442,7 +1442,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
   double ed = 0.97;
   int Nc = 8;
 
-  double dx = 0.2e-3;
+  double dx = 0.5e-3;
   double epsi =dx/2;
 
   double d_act = 0.125;
@@ -1450,7 +1450,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
   double d_des = -1e-2;
 
 
-  double FS=1, FD=1, FL=1, print =0;
+  double FS=1, FD=1, FL=0, print =2;
 
   ArrOfInt FP(nb_compo_tot), FB(nb_compo_tot);
 //--------------------------------------------------
@@ -1721,11 +1721,11 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 
 
     const double temps = schema_temps().temps_courant();
-    fout << "TEMPS: " << temps << std::endl;
+    //fout << "TEMPS: " << temps << std::endl;
     for (int compo = 0; compo < nb_compo_tot; compo++)
       {
         //if (FB(compo) != 0 || FP(compo) != 0)
-        if(1)
+        if(print == 1)
           {
             fout << std::scientific << std::showpos;
             fout << "compo: " << compo << "\tFB: " << FB(compo) << "\tFP: " << FP(compo);
@@ -1743,6 +1743,15 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
             for (int i = 0; i < dimension; i++) fout << " " << forces_particule(compo, i);
             fout << std::endl;
           }
+
+        if (print==2)
+          {
+            fout << std::scientific << std::showpos;
+            fout << FB(compo) << "\t" <<temps << "\t" << positions(compo, 1) << "\t" <<vitesses(compo,1) << "\t" ;
+            fout <<force_collision_bord(compo, 1)<< "\t" <<forces_bord(compo, 1) ;
+            fout << std::endl;
+          }
+
       }
 
     fout.close();
@@ -1755,17 +1764,18 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
   const int nb_faces = zone_vf.nb_faces();
   IntVect num_compo;
   zone_vf.zone().creer_tableau_elements(num_compo);
-  int indic_phase_fluide = 1; // a generaliser
+  int indic_phase_fluide = 1; // TODO a generaliser
 
 
   {
     for (int elem = 0; elem < nb_elem; elem++)
       {
-        // marquage des element fluide par -1
-        // num_compo[elem] = (indicatrice[elem] == indic_phase_fluide) ? -1 : 1;
 
-        // marquage des element fluide est diphasique  par -1
-        num_compo[elem] = (indicatrice[elem] != 1 - indic_phase_fluide) ? -1 : 1;
+        //les element diphasiques sont compris dans compo
+        //num_compo[elem] = (indicatrice[elem] == indic_phase_fluide) ? -1 : 1;
+
+        //les element diphasiques ne sont pas compris dans compo
+        num_compo[elem] = (indicatrice[elem] !=  1-indic_phase_fluide) ? -1 : 1;
       }
   }
   num_compo.echange_espace_virtuel();
@@ -1793,7 +1803,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
       //selection du numero de la particule qui contien l'element
       int compo = num_compo(elem);
 
-      // elem est solide ou diphasique ? ( non fluide ?)
+
       if (compo != -1)
         {
           //Cerr << finl << elem << " " << indicatrice[elem] << " " << compo << " ";
@@ -2553,18 +2563,19 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
           vpoint(i) = ( - flag_gradP(i) * gradP(i) + flag_diff * tab_diffusion(i) + coef_TSF(i) * termes_sources_interf(i) + terme_source_collisions(i) ) / rho_face
                       + tab_convection(i) + termes_sources(i) + gravite_face(i);
 
-          //const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
-          //const DoubleTab& cgf=zone_vf.xv();
-          //const Zone_VF& zone_vdf = ref_cast(Zone_VDF, zone_dis().valeur());
-          //const IntVect& ori = zone_vdf.orientation();
+          const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
+          const DoubleTab& cgf=zone_vf.xv();
+          const Zone_VF& zone_vdf = ref_cast(Zone_VDF, zone_dis().valeur());
+          const IntVect& ori = zone_vdf.orientation();
 //
-          //int cond =    ( -0.1e-3 < (cgf(i,0) ) && (cgf(i,0) < 0.1e-3)) &&
-          //              ( -0.1e-3 < (cgf(i,2) ) && (cgf(i,2) < 0.1e-3)) &&
-          //              (ori(i) == 1) ;
-          //if ( cond  )
-          //  {
-          //    Cerr << "fac  : " << i << "  y : " <<cgf(i,1) <<"  terme_source_collisions(fac) : "<< terme_source_collisions(i) <<finl;
-          //  }
+          int cond =    ( -0.25e-3 < (cgf(i,0) ) && (cgf(i,0) < 0.75e-3)) &&
+                        ( -0.25e-3 < (cgf(i,2) ) && (cgf(i,2) < 0.75e-3)) &&
+                        (ori(i) == 1) && terme_source_collisions(i) !=0;
+          if ( cond  )
+            {
+              Cerr << "(!!) fac  : " << i << "  y : " <<cgf(i,1) <<finl;
+              Cerr <<"  terme_source_collisions(fac) : "<< terme_source_collisions(i) <<finl;
+            }
 
         }
       else
