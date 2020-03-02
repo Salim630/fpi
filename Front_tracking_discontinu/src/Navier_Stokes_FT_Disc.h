@@ -83,7 +83,7 @@ protected:
                                              const DoubleTab& distance_interface_sommets,
                                              Champ_base& gradient_i);
 
-  virtual void calculer_champ_forces_collisions(const DoubleTab& indicatrice,DoubleTab& valeurs_champ) ;
+  virtual void calculer_champ_forces_collisions(const DoubleTab& indicatrice, DoubleTab& valeurs_champ, double& FC);
   REF(Probleme_FT_Disc_gen)  probleme_ft_;
 
   // Masse volumique calculee aux elements

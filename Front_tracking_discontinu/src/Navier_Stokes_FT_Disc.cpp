@@ -1312,7 +1312,8 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_superficielles(const Maillage_
   }
 }
 
-void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& indicatrice, DoubleTab& valeurs_champ)
+void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& indicatrice, DoubleTab& valeurs_champ,
+                                                             double& FC)
 {
 
   REF(Transport_Interfaces_FT_Disc) &refeq_transport = variables_internes().ref_eq_interf_proprietes_fluide;
@@ -1443,14 +1444,14 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
   int Nc = 8;
 
   double dx = 0.5e-3;
-  double epsi =dx/2;
+  double epsi =dx/10;
 
   double d_act = 0.125;
   double d_sat = 1e-3;
   double d_des = -1e-2;
 
 
-  double FS=1, FD=1, FL=0, print =2;
+  double FS=1, FD=0, FL=0, print =2;
 
   ArrOfInt FP(nb_compo_tot), FB(nb_compo_tot);
 //--------------------------------------------------
@@ -1546,6 +1547,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
                       if (d_int <= 0)
                         {
                           FB(compo)+=4;
+                          FC=1;
                           // collision
                           double F_spring = raideur_b * abs(dist_int) * normBord;
                           double F_dashpo = -1 * abs(amortis_b * normBord) * vitRelNorm;
@@ -1624,8 +1626,8 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 
                   if (d_int > d_sat)
                     {
-                      FP(compo)=1;
-                      FP(parti)=1;
+                      FP(compo)=-1;
+                      FP(parti)=-1;
                       // force de lubrification
                       double lambda     =0.5/d_int-9*log(d_int)/20-3*d_int*log(d_int)/56;
                       double lambda_act = 0.5 / d_act - 9 * log(d_act) / 20 - 3 * d_act * log(d_act) / 56;
@@ -1637,8 +1639,8 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 
                   if (d_int > 0 && d_int <= d_sat)
                     {
-                      FP(compo)=2;
-                      FP(parti)=2;
+                      FP(compo)=-1;
+                      FP(parti)=-1;
                       // force de saturation sature
                       double lambda_sat = 0.5 / d_sat - 9 * log(d_sat) / 20 - 3 * d_sat * log(d_sat) / 56;
                       double lambda_act = 0.5 / d_act - 9 * log(d_act) / 20 - 3 * d_act * log(d_act) / 56;
@@ -1649,8 +1651,8 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
                     }
                   else
                     {
-                      FP(compo)=3;
-                      FP(parti)=3;
+                      FP(compo)=-1;
+                      FP(parti)=-1;
                       // collision
                       double me = 1 / (1 / masse_compo(compo) + 1 / masse_compo(parti));
                       double raideur_p = (me * (3.14 * 3.14 + pow(log(ed), 2))) / pow(Nc * dt, 2);
@@ -1746,9 +1748,10 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 
         if (print==2)
           {
+            double fcb = (FB(compo)==2) ? FD*vitesses(compo,1)*(2*masse_compo(compo) * log(ed)) / (Nc * dt) : force_collision_bord(compo, 1);
             fout << std::scientific << std::showpos;
             fout << FB(compo) << "\t" <<temps << "\t" << positions(compo, 1) << "\t" <<vitesses(compo,1) << "\t" ;
-            fout <<force_collision_bord(compo, 1)<< "\t" <<forces_bord(compo, 1) ;
+            fout << fcb << "\t" <<forces_bord(compo, 1) ;
             fout << std::endl;
           }
 
@@ -1771,17 +1774,19 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
     for (int elem = 0; elem < nb_elem; elem++)
       {
 
-        //les element diphasiques sont compris dans compo
-        //num_compo[elem] = (indicatrice[elem] == indic_phase_fluide) ? -1 : 1;
+        //les elements diphasiques sont compris dans compo
+        num_compo[elem] = (indicatrice[elem] == indic_phase_fluide) ? -1 : 1; //TODO remplacer 1 par -2 ?
 
-        //les element diphasiques ne sont pas compris dans compo
-        num_compo[elem] = (indicatrice[elem] !=  1-indic_phase_fluide) ? -1 : 1;
+        //les elements diphasiques ne sont pas compris dans compo
+        //num_compo[elem] = (indicatrice[elem] !=  1-indic_phase_fluide) ? -1 : 1;
       }
   }
   num_compo.echange_espace_virtuel();
 
   const IntTab& elem_faces = zone_vf.elem_faces();
   const IntTab& faces_elem = zone_vf.face_voisins();
+  const DoubleTab& indicatrice_faces = refeq_transport.valeur().get_compute_indicatrice_faces().valeurs();
+
   //const DoubleTab& cgf = zone_vf.xv();
   const int nb_local_connex_components = search_connex_components_local(elem_faces, faces_elem, num_compo);
   const int nb_connex_components = compute_global_connex_components(num_compo, nb_local_connex_components);
@@ -1817,9 +1822,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
               int fac2 = elem_faces(elem, ori + dimension);
               // remplissage du champ de force au faces du domaine
               valeurs_champ(fac1) =
-                (1 - indicatrice[elem]) * volumes_entrelaces(fac1) * forces_solide(compo, ori);
+                (1 - indicatrice_faces(fac1)) * volumes_entrelaces(fac1) * forces_solide(compo, ori);
               valeurs_champ(fac2) =
-                (1 - indicatrice[elem]) * volumes_entrelaces(fac2) * forces_solide(compo, ori);
+                (1 - indicatrice_faces(fac2)) * volumes_entrelaces(fac2) * forces_solide(compo, ori);
 
 
               int cond = (-0.1e-3 < (cgf(fac1, 0)) && (cgf(fac1, 0) < 0.1e-3)) &&
@@ -2331,7 +2336,8 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
   //                                             / d             \    //
   //                INTEGRALE                    | -- (rho * v)  |    //
   //                (sur le volume de controle)  \ dt            /    //
-  DoubleTab terme_source_collisions; // -----------------
+  DoubleTab terme_source_collisions;
+  double isCollision =0 ;// -----------------
   {
     // Si une equation de transport est associee aux proprietes du fluide,
     // on ajoute le terme de tension de surface.
@@ -2361,7 +2367,7 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
 
         // calcule du terme source du au collisions  //--------------------------------
 //        variables_internes().terme_source_collisions.valeurs() = 0;
-        calculer_champ_forces_collisions(indicatrice.valeurs(),terme_source_collisions);
+        calculer_champ_forces_collisions(indicatrice.valeurs(), terme_source_collisions, isCollision);
       }
     else
       {
@@ -2555,26 +2561,39 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
     }
 
   // Ajout des differentes contributions a vpoint :
+  REF(Transport_Interfaces_FT_Disc) &myRefeq_transport = variables_internes().ref_eq_interf_proprietes_fluide;
+  const DoubleTab& myIndicatrice_faces = myRefeq_transport.valeur().get_compute_indicatrice_faces().valeurs();
+
   for (int i = 0; i < n; i++)
     {
       const double rho_face = tab_rho_faces(i);
       if (nbdim1)
         {
-          vpoint(i) = ( - flag_gradP(i) * gradP(i) + flag_diff * tab_diffusion(i) + coef_TSF(i) * termes_sources_interf(i) + terme_source_collisions(i) ) / rho_face
-                      + tab_convection(i) + termes_sources(i) + gravite_face(i);
+
+          if ( isCollision )
+            {
+              vpoint(i) = ( 1*flag_diff * tab_diffusion(i)  + 0.01*terme_source_collisions(i) ) / rho_face
+                          + 1*tab_convection(i)  ;
+            }
+          else
+            {
+
+              vpoint(i) = ( - flag_gradP(i) * gradP(i) + flag_diff * tab_diffusion(i) + coef_TSF(i) * termes_sources_interf(i)  ) / rho_face
+                          + tab_convection(i) + termes_sources(i) + gravite_face(i);
+            }
+
 
           const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
           const DoubleTab& cgf=zone_vf.xv();
           const Zone_VF& zone_vdf = ref_cast(Zone_VDF, zone_dis().valeur());
           const IntVect& ori = zone_vdf.orientation();
-//
-          int cond =    ( -0.25e-3 < (cgf(i,0) ) && (cgf(i,0) < 0.75e-3)) &&
-                        ( -0.25e-3 < (cgf(i,2) ) && (cgf(i,2) < 0.75e-3)) &&
+          int cond =    ( 0e-3 < (cgf(i,0) ) && (cgf(i,0) < 0.5e-3)) &&
+                        ( 0e-3 < (cgf(i,2) ) && (cgf(i,2) < 0.5e-3)) &&
                         (ori(i) == 1) && terme_source_collisions(i) !=0;
           if ( cond  )
             {
-              Cerr << "(!!) fac  : " << i << "  y : " <<cgf(i,1) <<finl;
-              Cerr <<"  terme_source_collisions(fac) : "<< terme_source_collisions(i) <<finl;
+              Cerr << "(!!) fac: " << i << "  y: " <<cgf(i,1) <<" indic_face: " << 1-myIndicatrice_faces(i) <<finl;
+              Cerr <<"  terme_source_collisions(fac): "<< terme_source_collisions(i) <<" vpoint(i): " << vpoint(i) <<finl;
             }
 
         }
