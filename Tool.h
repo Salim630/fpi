@@ -17,6 +17,8 @@
 class Tool {
 public:
     static  std::string myCode;
+    static int isFirstCollision;
+    static double memorisedElongation;
 private:
     static double myMuPhase1;
     static double myMuPhase0;

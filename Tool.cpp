@@ -12,6 +12,8 @@ double Tool::myMuPhase0=-1;
 DoubleVect Tool::myIndic;
 DoubleTab Tool::myNormaleInterfaceElem;
 
+int Tool::isFirstCollision=1;
+double Tool::memorisedElongation=-100;
 
 
 //implementation des membre fonctions

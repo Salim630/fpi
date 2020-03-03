@@ -8099,12 +8099,50 @@ void Transport_Interfaces_FT_Disc::calculer_vmoy_composantes_connexes(const Mail
         }
     }
 
-  mp_sum_for_each_item(vitesses);
-  {
-    DoubleVect s; // tab_divide prend DoubleVect, pas ArrOfDouble...
-    s.ref_array(surfaces_compo);
-    tab_divide_any_shape(vitesses, s);
-  }
+  //modif salim interpolation de la vitesse au centre de la particule solide
+  Cerr <<"before interpolation"<<finl;
+  for (int d=0; d<dim; d++)
+    {
+      Cerr <<"vitesses(0,"<<d<<"):  "<< vitesses(0,d)<<" end"<<finl;
+      Cerr <<"positions(0,"<<d<<"):  "<< positions(0,d)<<" end"<<finl;
+    }
+
+  const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
+  ArrOfInt elem_cg;
+  zone_vf.zone().chercher_elements(positions, elem_cg);
+
+  const Equation_base& eqn_hydraulique = variables_internes_->refequation_vitesse_transport.valeur();
+  const Champ_base& champ_vitesse = eqn_hydraulique.inconnue().valeur();
+
+  FTd_vecteur3 coord;
+  for (int d=0; d<dim; d++)
+    {
+      coord[d] = positions(0, d);
+    }
+
+  const int element = elem_cg(0);
+  FTd_vecteur3 vitesse;
+  interpoler_vitesse_point_vdf(champ_vitesse, coord, element, vitesse);
+
+  for (int d=0; d<dim; d++)
+    {
+      vitesses(0,d)=vitesse[d];
+    }
+  Cerr <<"after interpolation"<<finl;
+  for (int d=0; d<dim; d++)
+    {
+      Cerr <<"vitesses(0,"<<d<<"):  "<< vitesses(0,d)<<" end"<<finl;
+      Cerr <<"positions(0,"<<d<<"):  "<< positions(0,d)<<" end"<<finl;
+    }
+
+// mp_sum_for_each_item(vitesses);
+// {
+//   DoubleVect s; // tab_divide prend DoubleVect, pas ArrOfDouble...
+//   s.ref_array(surfaces_compo);
+//   tab_divide_any_shape(vitesses, s);
+// }
+
+
 
   // HMS : recuperation des vitesses et des positions des centres
 
