@@ -1440,7 +1440,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 // -------------------------------------------------
 
 // parametre du modele -----------------------------
-  double ed = 1;
+  double ed = 0.97;
   int Nc = 8;
 
   double dx = 0.5e-3;
@@ -1451,7 +1451,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
   double d_des = -1e-2;
 
 
-  double FS=1, FD=0, FL=0, print =2;
+  double FS=1, FD=1, FL=1, print =2;
   double impression_dist_int_tr=7.777777;
   double impression_next_dist_int_tr=8.888888;
 
@@ -1498,7 +1498,6 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 
       double raideur_b = (masse_compo(compo) * (3.1415927 * 3.1415927 + pow(log(ed), 2))) / pow(Nc * dt, 2);
       double amortis_b = (2 * masse_compo(compo) * log(ed)) / (Nc * dt);
-
 
       for (int d = 0; d < dimension; d++)
         {
@@ -1568,7 +1567,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
                           FB(compo)+=4;
                           FC=1;
                           // collision
-                          // pour semi implicite calculer la force avec dist_int_np1
+
                           double F_spring = next_dist_int_translate <= 0 ? raideur_b * abs(next_dist_int_translate) * normBord : 0;
                           double F_dashpo = -1 * abs(amortis_b * normBord) * vitRelNorm;
                           //force en N/m^3
@@ -1580,7 +1579,6 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
                               {
                                 printf(" (*)_ERROR_SPRING_(*) \n");
                                 printf("F_dashpo: %f, norm_d[comp:%d,d:%d]: %f ", F_spring, compo, d, normBord);
-
                                 Process::exit();
                               }
 
@@ -1603,7 +1601,6 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
                         }
 
                     }
-
 
                 }
 
@@ -2594,7 +2591,7 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
       if (nbdim1)
         {
 
-          if ( isCollision )
+          if ( 0 )
             {
               vpoint(i) = ( 1*flag_diff * tab_diffusion(i)  + 1*terme_source_collisions(i) ) / rho_face
                           + 1*tab_convection(i)  ;
@@ -2602,7 +2599,7 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
           else
             {
 
-              vpoint(i) = ( - flag_gradP(i) * gradP(i) + flag_diff * tab_diffusion(i) + coef_TSF(i) * termes_sources_interf(i)  ) / rho_face
+              vpoint(i) = ( - flag_gradP(i) * gradP(i) + flag_diff * tab_diffusion(i) + coef_TSF(i) * termes_sources_interf(i) + 1*terme_source_collisions(i) ) / rho_face
                           + tab_convection(i) + termes_sources(i) + gravite_face(i);
             }
 
