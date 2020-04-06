@@ -11,14 +11,14 @@
 
 #include <string.h>
 #include <string>
-
+#include <IntTab.h>
 
 
 class Tool {
 public:
     static  std::string myCode;
-    static int isFirstCollision;
-    static double memorisedElongation;
+    static IntTab isFirstCollision;
+    static DoubleTab memorisedElongation;
 private:
     static double myMuPhase1;
     static double myMuPhase0;

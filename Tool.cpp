@@ -3,6 +3,7 @@
 //
 
 #include <Tool.h>
+#include <IntTab.h>
 
 //declaration des membre donnees
 std::string Tool::myCode="commicode 011ceb";
@@ -12,8 +13,8 @@ double Tool::myMuPhase0=-1;
 DoubleVect Tool::myIndic;
 DoubleTab Tool::myNormaleInterfaceElem;
 
-int Tool::isFirstCollision=1;
-double Tool::memorisedElongation=-100;
+IntTab Tool::isFirstCollision;
+DoubleTab Tool::memorisedElongation;
 
 
 //implementation des membre fonctions
