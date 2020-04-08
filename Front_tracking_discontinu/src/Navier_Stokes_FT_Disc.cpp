@@ -88,6 +88,7 @@ public:
   Champ_Fonc terme_source;
   Champ_Fonc terme_source_interfaces;
   Champ_Fonc terme_source_collisions;
+  Champ_Fonc num_compo;
   Champ_Fonc indicatrice_p1b;
   Champ_Fonc gradient_indicatrice;
   Champ_Fonc potentiel_faces;
