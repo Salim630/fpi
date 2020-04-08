@@ -1,7 +1,3 @@
-//
-// Created by salim on 19/10/19.
-//
-
 #include <Tool.h>
 #include <IntTab.h>
 

@@ -774,6 +774,21 @@ void Navier_Stokes_FT_Disc::discretiser()
                         variables_internes().derivee_temporelle_indicatrice);
   champs_compris.add(variables_internes().derivee_temporelle_indicatrice.valeur());
   champs_compris_.ajoute_champ(variables_internes().derivee_temporelle_indicatrice);
+  //HMS
+  dis.discretiser_champ("vitesse", ma_zone_dis,
+                        "terme_source_collisions", "",
+                        -1 /* nb composantes par defaut */, temps,
+                        variables_internes().terme_source_collisions);
+  champs_compris.add(variables_internes().terme_source_collisions.valeur());
+  champs_compris_.ajoute_champ(variables_internes().terme_source_collisions);
+
+  dis.discretiser_champ("pression", ma_zone_dis,
+                        "num_compo", "",
+                        1 /* composante */, temps,
+                        variables_internes().num_compo);
+  champs_compris.add(variables_internes().num_compo.valeur());
+  champs_compris_.ajoute_champ(variables_internes().num_compo);
+
 }
 
 // Description:
@@ -1873,6 +1888,10 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
   //const int nb_faces = zone_vf.nb_faces();
   IntVect num_compo;
   zone_vf.zone().creer_tableau_elements(num_compo);
+
+  DoubleVect num_compo_copie;
+  zone_vf.zone().creer_tableau_elements(num_compo_copie);
+
   int indic_phase_fluide = 1; // TODO a generaliser
   const DoubleTab& xp = zone_vf.xp();
 
@@ -1883,24 +1902,55 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 
         //les elements diphasiques sont compris dans compo
         num_compo[elem] = (indicatrice[elem] == indic_phase_fluide) ? -1 : 1; //TODO remplacer 1 par -2 ?
-
+        num_compo_copie[elem]=num_compo[elem];
         //les elements diphasiques ne sont pas compris dans compo
         //num_compo[elem] = (indicatrice[elem] !=  1-indic_phase_fluide) ? -1 : 1;
       }
   }
   num_compo.echange_espace_virtuel();
-  ArrOfInt elem_cg;
+  num_compo_copie.echange_espace_virtuel();
+
+
+  ArrOfInt elem_cg, num_lagrange(nb_compo_tot);
   zone_vf.zone().chercher_elements(positions, elem_cg);
-  mp_max_for_each_item(elem_cg);
+
 
   const IntTab& elem_faces = zone_vf.elem_faces();
   const IntTab& faces_elem = zone_vf.face_voisins();
   const DoubleTab& indicatrice_faces = refeq_transport.valeur().get_compute_indicatrice_faces().valeurs();
 
+
   //const DoubleTab& cgf = zone_vf.xv();
-  const int nb_local_connex_components = search_connex_components_local(elem_faces, faces_elem, elem_cg, n, num_compo);
+  const int nb_local_connex_components = search_connex_components_local(elem_faces, faces_elem, num_compo);
   const int nb_connex_components = compute_global_connex_components(num_compo, nb_local_connex_components);
 
+  //remplissage du tableau de corespandance indice interface lagrange
+  for (int compo = 0; compo < nb_compo_tot; compo++)
+    {
+      if (elem_cg[compo] != -1)
+        {
+          int num_euler = num_compo[elem_cg[compo]];
+          num_lagrange[num_euler] = compo;
+        }
+    }
+  mp_max_for_each_item(num_lagrange);
+
+  //syncronisation entre les indice lagrangien et eulerien dans num_compo
+  //on parcours toutes les cellule du maillage, on identifie son indice eulerien
+  // on utilise l'indice eulerien  pour trouver l'indice lagrangien correspandant
+  // on remplace l'indice eulerien par l'indice lagrengien
+  for (int elem = 0; elem < nb_elem; elem++)
+    {
+      int num_euler = num_compo[elem];
+      if(num_euler!=-1)
+        {
+          num_compo[elem]=num_lagrange[num_euler];
+        }
+      //sauvegrade pour postraitement
+      num_compo_copie[elem]=num_compo[elem];
+    }
+
+  variables_internes().num_compo.valeur().valeurs()=num_compo_copie; // champ pret pour postraitement
 // a ce stade num_compo(elem) contient :
 // -1 si l'element est fluide pure.
 // NUM avec : 0 < Num < nb_connex_components, si l'element est solide ou biphasique.
@@ -2515,7 +2565,8 @@ DoubleTab& Navier_Stokes_FT_Disc::derivee_en_temps_inco(DoubleTab& vpoint)
   //                                             / d             \    //
   //                INTEGRALE                    | -- (rho * v)  |    //
   //                (sur le volume de controle)  \ dt            /    //
-  DoubleTab terme_source_collisions(la_vitesse.valeurs());
+  //DoubleTab terme_source_collisions(la_vitesse.valeurs());
+  DoubleTab& terme_source_collisions=variables_internes().terme_source_collisions.valeur().valeurs() ;
   terme_source_collisions=0;
   double isCollision =0 ;// -----------------
   {
