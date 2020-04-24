@@ -1352,70 +1352,70 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
   int n = search_connex_components_local_FT(maillage, compo_connexes_facettes); //
   int nb_compo_tot = compute_global_connex_components_FT(maillage, compo_connexes_facettes, n); //
 
-
+  assert(nb_compo_tot !=0);
 
   // si vitesses na pas les bonnes dimension (premiere pas de temps, en calcule la position des centre de gravite et
   // on initialise les vitesse des inclusions a zero
-  // if ((vitesses.dimension(0) != nb_compo_tot) || (vitesses.dimension(1) != dimension))
-  if (1)
-    {
-      positions.resize(nb_compo_tot, dimension);
-      vitesses.resize(nb_compo_tot, dimension);
-      vitesses = 0;
-
-      // calcule des centre de gravite pour les composantes
-      assert(nb_compo_tot == positions.dimension(0));
-
-      const int dim = positions.dimension(1); //
-      const ArrOfDouble& surface_facettes = maillage.get_update_surface_facettes();
-      const IntTab& facettes = maillage.facettes();
-      const DoubleTab& sommets = maillage.sommets();
-      assert(facettes.dimension(1) == dim);
-
-      // Surface totale de chaque composante connexe, initialise a zero
-      ArrOfDouble surfaces_compo(nb_compo_tot);
-      positions = 0.;
-
-      // Calcul du centre de gravite de la composante connexe
-      //  (centre de gravite de la surface, pas du volume)
-      const int nb_facettes_tot = facettes.dimension_tot(0);
+  if ((vitesses.dimension(0) != nb_compo_tot) || (vitesses.dimension(1) != dimension))
+    if (1)
       {
-        for (int i = 0; i < nb_facettes_tot; i++)
-          {
-            if (maillage.facette_virtuelle(i)) continue;
+        positions.resize(nb_compo_tot, dimension);
+        vitesses.resize(nb_compo_tot, dimension);
+        vitesses = 0;
 
-            const int compo = compo_connexes_facettes[i];
-            const double surface = surface_facettes[i];
-            surfaces_compo[compo] += surface;
-            // Centre de gravite de la facette, pondere par la surface
-            for (int j = 0; j < dim; j++)
-              {
-                // Indice du sommet
-                const int s = facettes(i, j);
-                for (int k = 0; k < dim; k++)
-                  {
-                    // On divisera par dim a la fin:
-                    positions(compo, k) += surface * sommets(s, k);
-                  }
-              }
-          }
-        mp_sum_for_each_item(surfaces_compo);
-        mp_sum_for_each_item(positions);
+        // calcule des centre de gravite pour les composantes
+        assert(nb_compo_tot == positions.dimension(0));
 
-        positions *= (1. / dim);
-        DoubleVect s; // tab_divide prend DoubleVect, pas ArrOfDouble...
-        s.ref_array(surfaces_compo);
-        tab_divide_any_shape(positions, s);
-        //---fin calcul surface_compo et position_centre_gravite_compo ( a rassembler dans une focntion)---//
+        const int dim = positions.dimension(1); //
+        const ArrOfDouble& surface_facettes = maillage.get_update_surface_facettes();
+        const IntTab& facettes = maillage.facettes();
+        const DoubleTab& sommets = maillage.sommets();
+        assert(facettes.dimension(1) == dim);
+
+        // Surface totale de chaque composante connexe, initialise a zero
+        ArrOfDouble surfaces_compo(nb_compo_tot);
+        positions = 0.;
+
+        // Calcul du centre de gravite de la composante connexe
+        //  (centre de gravite de la surface, pas du volume)
+        const int nb_facettes_tot = facettes.dimension_tot(0);
+        {
+          for (int i = 0; i < nb_facettes_tot; i++)
+            {
+              if (maillage.facette_virtuelle(i)) continue;
+
+              const int compo = compo_connexes_facettes[i];
+              const double surface = surface_facettes[i];
+              surfaces_compo[compo] += surface;
+              // Centre de gravite de la facette, pondere par la surface
+              for (int j = 0; j < dim; j++)
+                {
+                  // Indice du sommet
+                  const int s = facettes(i, j);
+                  for (int k = 0; k < dim; k++)
+                    {
+                      // On divisera par dim a la fin:
+                      positions(compo, k) += surface * sommets(s, k);
+                    }
+                }
+            }
+          mp_sum_for_each_item(surfaces_compo);
+          mp_sum_for_each_item(positions);
+
+          positions *= (1. / dim);
+          DoubleVect s; // tab_divide prend DoubleVect, pas ArrOfDouble...
+          s.ref_array(surfaces_compo);
+          tab_divide_any_shape(positions, s);
+          //---fin calcul surface_compo et position_centre_gravite_compo ( a rassembler dans une focntion)---//
+        }
+
+        Tool::isFirstCollision.resize(nb_compo_tot);
+        Tool::isFirstCollision = 1;
+
+        Tool::memorisedElongation.resize(nb_compo_tot);
+        Tool::memorisedElongation = -100;
+
       }
-
-      Tool::isFirstCollision.resize(nb_compo_tot);
-      Tool::isFirstCollision = 1;
-
-      Tool::memorisedElongation.resize(nb_compo_tot);
-      Tool::memorisedElongation = -100;
-
-    }
 
   //auto stop = high_resolution_clock::now();
   //auto duration = duration_cast<milliseconds>(stop - start);
@@ -1443,7 +1443,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 
   double rho_solide = 1140.;
   double rayon = 8.333e-4;
-  double mu_fluide = 1e-4;
+  double mu_fluide = 1e-3;
 
   //calcule du rayon et du volume pour chaque composante
   for (int compo = 0; compo < nb_compo_tot; compo++)
@@ -1529,10 +1529,10 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
               if (ori == d)
                 {
                   double dist_cg = positions(compo, d) - positions_bords[bord];
-                  double dist_int = abs(dist_cg) - rayons_compo[compo];
+                  double dist_int = fabs(dist_cg) - rayons_compo[compo];
                   double d_int = dist_int / rayons_compo[compo];
 
-                  double normBord = dist_cg / abs(dist_cg);
+                  double normBord = dist_cg / fabs(dist_cg);
                   double vitRelNorm = vitesses(compo, d) - 0.0;
                   if (d_int <= d_act)
                     {
@@ -1566,7 +1566,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
                           //euler semi implicite
                           double next_positionCg = positions(compo, d) + vitesses(compo, d) * dt;
                           double next_dist_int =
-                            abs(next_positionCg - positions_bords[bord]) - rayons_compo[compo]; // delta^(n+1)
+                            fabs(next_positionCg - positions_bords[bord]) - rayons_compo[compo]; // delta^(n+1)
 
                           if (Tool::isFirstCollision(compo) == 1)
                             {
@@ -1578,9 +1578,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
                           double next_dist_int_translate = next_dist_int - Tool::memorisedElongation(compo);
                           // collision
                           double F_spring =
-                            next_dist_int_translate <= 0 ? raideur_b * abs(next_dist_int_translate) * normBord
+                            next_dist_int_translate <= 0 ? raideur_b * fabs(next_dist_int_translate) * normBord
                             : 0;
-                          double F_dashpo = -1 * abs(amortis_b * normBord) * vitRelNorm;
+                          double F_dashpo = -1 * fabs(amortis_b * normBord) * vitRelNorm;
                           //force en N/m^3
                           force_collision_bord(compo, d) += FS * F_spring + FD * F_dashpo;
 
@@ -1615,7 +1615,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
                   dist_cg += tmp;
                 }
               dist_cg = sqrt(dist_cg);
-              double dist_int = abs(dist_cg) - (rayons_compo[compo] + rayons_compo[parti]);
+              double dist_int = fabs(dist_cg) - (rayons_compo[compo] + rayons_compo[parti]);
               double d_int = dist_int / rayons_compo[compo];
               double Norm_d = (positions(compo, d) - positions(parti, d)) / dist_cg;
 
@@ -1666,7 +1666,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
                           next_dist_cg += tmp;
                         }
                       next_dist_cg = sqrt(next_dist_cg);
-                      double next_dist_int = abs(next_dist_cg) - (rayons_compo[compo] + rayons_compo[parti]);
+                      double next_dist_int = fabs(next_dist_cg) - (rayons_compo[compo] + rayons_compo[parti]);
 
 
                       double F_spring = next_dist_int <= 0 ? -1 * raideur_p * next_dist_int * Norm_d : 0;
@@ -1814,6 +1814,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
   // =============================================================================================================
   //  impression
   // =============================================================================================================
+  //printf("temps: %f pc:%d size compo_connexes_facettes: %d\n",temps,Process::me(),compo_connexes_facettes.size_array() );
 
   if (0)
     {
@@ -1930,7 +1931,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
             {
               //int bord =1, d=1;
               //double posCompo_np1 = positions(compo,d) + vitesses(compo,d)*dt ;
-              //double dist_int_np1 = abs(posCompo_np1 - positions_bords[bord]) - rayons_compo[compo];
+              //double dist_int_np1 = fabs(posCompo_np1 - positions_bords[bord]) - rayons_compo[compo];
 
               fout << std::scientific << std::showpos;
               fout << compo << " [" << FB(compo) << ",\t" << temps << ",\t" << positions(compo, 1) << ",\t"
@@ -1950,10 +1951,15 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
           if (Process::je_suis_maitre())
             {
               fout2 << std::scientific << std::showpos;
-              fout2 << temps << '\t';
+              fout2 << temps;
               for (int compo = 0; compo < nb_compo_tot; compo++)
                 {
-                  fout2 << "compo:" << compo << '\t' << positions(compo, 1) << '\t' << vitesses(compo, 1) << '\t';
+                  fout2 << '\t';
+                  for (int i = 0; i < dimension; i++) fout2 << " " << positions(compo, i);
+                  fout2 << "  ";
+                  for (int i = 0; i < dimension; i++) fout2 << " " << vitesses(compo, i);
+
+                  //fout2 << "compo:" << compo << '\t' << positions(compo, 1) << '\t' << vitesses(compo, 1) << '\t';
                 }
 
               fout2 << std::endl;
