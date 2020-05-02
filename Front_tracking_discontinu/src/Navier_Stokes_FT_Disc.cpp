@@ -51,8 +51,8 @@
 #include <iomanip>
 #include <SFichier.h>
 
-#include <chrono>
-using namespace std::chrono;
+// #include <chrono>
+// using namespace std::chrono;
 
 Implemente_instanciable_sans_constructeur_ni_destructeur(Navier_Stokes_FT_Disc,"Navier_Stokes_FT_Disc",Navier_Stokes_Turbulent);
 
@@ -1441,9 +1441,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
   ArrOfDouble volumes_compo(nb_compo_tot);
   ArrOfDouble masse_compo(nb_compo_tot);
 
-  double rho_solide = 1140.;
-  double rayon = 8.333e-4;
-  double mu_fluide = 1e-3;
+  double rho_solide = 7780.;
+  double rayon = 6.35e-3;
+  double mu_fluide = 0.045;
 
   //calcule du rayon et du volume pour chaque composante
   for (int compo = 0; compo < nb_compo_tot; compo++)
@@ -1458,7 +1458,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
   double ed = 0.97;
   int Nc = 8;
 
-  double dx = 1e-4;
+  double dx = 1.5888e-3;
   double epsi = dx / 4;
 
   double d_act = 0.125;
@@ -1488,9 +1488,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
   positions_bords[0] = 0 + epsi;
   positions_bords[1] = 0 + epsi;
   positions_bords[2] = 0 + epsi;
-  positions_bords[3] = 1e-2 - epsi;
-  positions_bords[4] = 4e-2 - epsi;
-  positions_bords[5] = 1e-2 - epsi;
+  positions_bords[3] = 38.1e-3 - epsi;
+  positions_bords[4] = 76.2e-3 - epsi;
+  positions_bords[5] = 38.1e-3 - epsi;
 
   DoubleTab force_collision_bord(nb_compo_tot, dimension);
   DoubleTab force_lubrification_bord(nb_compo_tot, dimension);
@@ -1603,9 +1603,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
           //-------------- contribution des particules -----------------------
           for (int parti = compo + 1; parti < nb_compo_tot; parti++)
             {
-              double me = 1 / (1 / masse_compo[compo] + 1 / masse_compo(parti));
-              double raideur_p = (me * (3.1415927 * 3.1415927 + pow(log(ed), 2))) / pow(Nc * dt, 2);
-              double amortis_p = (me * log(ed)) / (Nc * dt);
+              double m_e = 1 / (1 / masse_compo[compo] + 1 / masse_compo(parti));
+              double raideur_p = (m_e * (3.1415927 * 3.1415927 + pow(log(ed), 2))) / pow(Nc * dt, 2);
+              double amortis_p = (m_e * log(ed)) / (Nc * dt);
               //distance entre les centre de gravites des particules
               double dist_cg = 0;
               for (int j = 0; j < dimension; j++)
@@ -1639,6 +1639,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
                       double lambda_act = 0.5 / d_act - 9 * log(d_act) / 20 - 3 * d_act * log(d_act) / 56;
                       force_lubrification_particule(compo, d) += (-6 * 3.1415927 * mu_fluide * rayons_compo[compo] *
                                                                   vitRelNorm * (lambda - lambda_act));
+                      force_lubrification_particule(parti, d) += -force_lubrification_particule(compo, d);
                     }
 
                   if (d_des < d_int && d_int <= d_sat)
@@ -1651,6 +1652,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 
                       force_lubrification_particule(compo, d) += (-6 * 3.1415927 * mu_fluide * rayons_compo[compo] *
                                                                   vitRelNorm * (lambda_sat - lambda_act));
+                      force_lubrification_particule(parti, d) += -force_lubrification_particule(compo, d);
                     }
 
                   if (d_int <= 0)
@@ -1934,7 +1936,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
               //double dist_int_np1 = fabs(posCompo_np1 - positions_bords[bord]) - rayons_compo[compo];
 
               fout << std::scientific << std::showpos;
-              fout << compo << " [" << FB(compo) << ",\t" << temps << ",\t" << positions(compo, 1) << ",\t"
+              fout << compo << " [" << FP(compo)/3 << ",\t" << temps << ",\t" << positions(compo, 1) << ",\t"
                    << vitesses(compo, 1) << ",\t";
               fout << forces_solide(compo, 1) << ",\t" << impression_d_int(compo) << ",\t"
                    << impression_dist_int_tr(compo) << ",\t" << impression_next_dist_int_tr(compo) << "], ";

@@ -2,7 +2,7 @@
 #include <IntTab.h>
 
 //declaration des membre donnees
-std::string Tool::myCode="commicode 015.1rmp";
+std::string Tool::myCode="commicode 015.2rmp";
 
 double Tool::myMuPhase1=-1;
 double Tool::myMuPhase0=-1;
