@@ -1,18 +1,23 @@
 #include <Tool.h>
 #include <IntTab.h>
+#include <Pave.h>
 
 //declaration des membre donnees
 std::string Tool::myCode="commicode 015.2rmp";
 
 double Tool::myMuPhase1=-1;
 double Tool::myMuPhase0=-1;
+double Tool::myRayon=-1;
+
 DoubleVect Tool::myIndic;
 DoubleTab Tool::myNormaleInterfaceElem;
 
 IntTab Tool::isFirstCollision;
 DoubleTab Tool::memorisedElongation;
 
-
+DoubleVect Tool::myOrigine(3);
+DoubleVect Tool::myLongueurs(3);
+IntVect Tool::myNb_Noeuds(3);
 //implementation des membre fonctions
 
 //utilitaire
@@ -66,6 +71,24 @@ const DoubleTab &Tool::getMyNormaleInterfaceElem() {
 
 void Tool::setMyNormaleInterfaceElem(const DoubleTab &myNormaleInterfaceElem) {
     Tool::myNormaleInterfaceElem = myNormaleInterfaceElem;
+}
+
+double Tool::calc_positions_bords(ArrOfDouble &positions_bords)
+{
+
+    double dx =myLongueurs(0)/(myNb_Noeuds(0)-1);
+    double epsi =dx/4;
+    positions_bords[0] = myOrigine(0) + epsi;
+    positions_bords[1] = myOrigine(1) + epsi;
+    positions_bords[2] = myOrigine(2) + epsi;
+    positions_bords[3] = myOrigine(0)+myLongueurs(0) - epsi;
+    positions_bords[4] = myOrigine(1)+myLongueurs(1) - epsi;
+    positions_bords[5] = myOrigine(2)+myLongueurs(2) - epsi;
+    //for (int i = 0; i < 6; i++)
+    //{
+    //    printf("  (a) positions_bords[%d]=%f\n",i,positions_bords[i]);
+    //}
+return dx;
 }
 
 

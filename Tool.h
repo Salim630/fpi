@@ -19,6 +19,11 @@ public:
     static  std::string myCode;
     static IntTab isFirstCollision;
     static DoubleTab memorisedElongation;
+    static DoubleVect myOrigine;
+    static DoubleVect myLongueurs;
+    static IntVect myNb_Noeuds;
+    static double myRayon;
+
 private:
     static double myMuPhase1;
     static double myMuPhase0;
@@ -45,6 +50,7 @@ public:
     static const DoubleTab &getMyNormaleInterfaceElem();
     static void setMyNormaleInterfaceElem(const DoubleTab &myNormaleInterfaceElem);
 
+    static double calc_positions_bords(ArrOfDouble &positions_bords);
     //--
 };
 
