@@ -3,11 +3,12 @@
 #include <Pave.h>
 
 //declaration des membre donnees
-std::string Tool::myCode="commicode 015.2rmp";
+std::string Tool::myCode="commicode 015.3rmp";
 
 double Tool::myMuPhase1=-1;
 double Tool::myMuPhase0=-1;
 double Tool::myRayon=-1;
+double Tool::d_desactivation_lubrification =0;
 
 DoubleVect Tool::myIndic;
 DoubleTab Tool::myNormaleInterfaceElem;

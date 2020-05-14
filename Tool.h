@@ -23,6 +23,7 @@ public:
     static DoubleVect myLongueurs;
     static IntVect myNb_Noeuds;
     static double myRayon;
+    static double d_desactivation_lubrification;
 
 private:
     static double myMuPhase1;
