@@ -14,6 +14,7 @@
 #include <IntTab.h>
 
 
+
 class Tool {
 public:
     static  std::string myCode;
@@ -24,6 +25,7 @@ public:
     static IntVect myNb_Noeuds;
     static double myRayon;
     static double d_desactivation_lubrification;
+    static int compteur_;
 
 private:
     static double myMuPhase1;
@@ -52,6 +54,8 @@ public:
     static void setMyNormaleInterfaceElem(const DoubleTab &myNormaleInterfaceElem);
 
     static double calc_positions_bords(ArrOfDouble &positions_bords);
+
+
     //--
 };
 

@@ -1341,13 +1341,15 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_superficielles(const Maillage_
 void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& indicatrice, DoubleTab& valeurs_champ,
                                                              double& FC)
 {
+  Tool::compteur_+=1;
   Cerr << "Navier_Stokes_FT_Disc::calculer_champ_forces_collisions" << finl;
   //auto start = high_resolution_clock::now();
 
   REF(Transport_Interfaces_FT_Disc) &refeq_transport = variables_internes().ref_eq_interf_proprietes_fluide;
   const Transport_Interfaces_FT_Disc& eq_transport = refeq_transport.valeur();
   const Maillage_FT_Disc& maillage = eq_transport.maillage_interface();
-
+  const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
+  const Zone_VF& zone_vdf = ref_cast(Zone_VDF, zone_dis().valeur());
   // recuperation des vitesse compo et des centres de gravites
   DoubleTab& positions = eq_transport.getPositionsCompo();
   DoubleTab& vitesses = eq_transport.getVitessesCompo();
@@ -1423,6 +1425,29 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 
       }
 
+  // on rearange les numero de particules pour avoir la meme numerotation qu'au pas de temps precedant
+  ArrOfInt elem_cg ;
+  zone_vf.zone().chercher_elements(positions, elem_cg);
+  if (Tool::compteur_ >= 2)
+    {
+      DoubleVect old_num_compo = variables_internes().num_compo.valeur().valeurs();
+      DoubleTab copy_vitesses = vitesses;
+      DoubleTab copy_positions = positions;
+      for (int bad_compo = 0; bad_compo < nb_compo_tot; bad_compo++)
+        {
+          if (elem_cg[bad_compo] != -1)
+            {
+              int good_compo = old_num_compo[elem_cg[bad_compo]];
+              for (int d = 0; d < dimension; d++)
+                {
+                  vitesses(bad_compo, d) = copy_vitesses(good_compo, d);
+                  positions(bad_compo, d) = copy_positions(good_compo, d);
+                }
+            }
+
+        }
+
+    }
   //auto stop = high_resolution_clock::now();
   //auto duration = duration_cast<milliseconds>(stop - start);
   //Cerr << "Calcul position vitesse des centres : " << duration.count() << " ms" << finl;
@@ -1431,8 +1456,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 
 // ----------
 
-  const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
-  const Zone_VF& zone_vdf = ref_cast(Zone_VDF, zone_dis().valeur());
+
 
   //const DoubleTab& cgf = zone_vf.xv();
   const IntVect& orientation = zone_vdf.orientation();
@@ -1781,8 +1805,8 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 
   const DoubleTab& xp = zone_vf.xp();
 
-  ArrOfInt elem_cg, num_lagrange(nb_compo_tot);
-  zone_vf.zone().chercher_elements(positions, elem_cg);
+  ArrOfInt  num_lagrange(nb_compo_tot);
+
 
 
   for (int elem = 0; elem < nb_elem; elem++)
@@ -1809,6 +1833,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
   const int nb_local_connex_components = search_connex_components_local(elem_faces, faces_elem, num_compo);
   const int nb_connex_components = compute_global_connex_components(num_compo, nb_local_connex_components);
 
+  // on s'assure que le numero eulerien corresepond au bon numero lagrangien
   //remplissage du tableau de corespandance indice interface lagrange
   for (int compo = 0; compo < nb_compo_tot; compo++)
     {
@@ -1846,7 +1871,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
           //?
         };
     }
-  variables_internes().num_compo.valeur().valeurs()=num_compo_copie; // champ pret pour postraitement
+
 
 
 
@@ -1874,7 +1899,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
         }
     }
   valeurs_champ.echange_espace_virtuel();
-  variables_internes().num_compo.valeur().valeurs()=num_compo_copie;
+  variables_internes().num_compo.valeur().valeurs()=num_compo_copie;  // champ pret pour postraitement
 
 
 

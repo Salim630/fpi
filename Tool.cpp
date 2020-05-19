@@ -2,14 +2,18 @@
 #include <IntTab.h>
 #include <Pave.h>
 
-//declaration des membre donnees
-std::string Tool::myCode="commicode 015.3rmp";
 
+#include <communications.h>
+
+
+//declaration des membre donnees
+std::string Tool::myCode="commicode 015.4rmp";
+int dimension = 3;
 double Tool::myMuPhase1=-1;
 double Tool::myMuPhase0=-1;
 double Tool::myRayon=-1;
 double Tool::d_desactivation_lubrification =0;
-
+int Tool::compteur_=0;
 DoubleVect Tool::myIndic;
 DoubleTab Tool::myNormaleInterfaceElem;
 
