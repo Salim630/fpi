@@ -109,6 +109,8 @@ private:
 
   double minx,maxx,pente;
   int is_repulsion;
+
+  void calculer_champ_forces_collisions2(const DoubleTab& indicatrice, DoubleTab& valeurs_champ, double& FC);
 };
 
 

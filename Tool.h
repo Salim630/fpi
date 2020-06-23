@@ -24,8 +24,15 @@ public:
     static DoubleVect myLongueurs;
     static IntVect myNb_Noeuds;
     static double myRayon;
+    static double mySigma;
     static double d_desactivation_lubrification;
     static int compteur_;
+
+    static DoubleTab F_old;
+    static DoubleTab F_now;
+    static DoubleTab raideur;
+    static DoubleTab e_eff;
+    static double vitessRelImp;
 
 private:
     static double myMuPhase1;
@@ -57,6 +64,15 @@ public:
 
 
     //--
+    static double calc_positions_bords2(ArrOfDouble &positions_bords);
+
+    static double module_vecteur(DoubleTab &vecteur);
+
+    static double prod_scal(DoubleTab &A, DoubleTab &B);
+
+    static int checkForDuplicates(ArrOfInt &vector);
+
+
 };
 
 

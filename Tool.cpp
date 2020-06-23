@@ -7,11 +7,12 @@
 
 
 //declaration des membre donnees
-std::string Tool::myCode="commicode 015.4rmp";
+std::string Tool::myCode="commicode 015.5mdr";
 int dimension = 3;
 double Tool::myMuPhase1=-1;
 double Tool::myMuPhase0=-1;
 double Tool::myRayon=-1;
+double Tool::mySigma=-1;
 double Tool::d_desactivation_lubrification =0;
 int Tool::compteur_=0;
 DoubleVect Tool::myIndic;
@@ -23,6 +24,12 @@ DoubleTab Tool::memorisedElongation;
 DoubleVect Tool::myOrigine(3);
 DoubleVect Tool::myLongueurs(3);
 IntVect Tool::myNb_Noeuds(3);
+
+DoubleTab Tool::F_old;
+DoubleTab Tool::F_now;
+DoubleTab Tool::raideur;
+DoubleTab Tool::e_eff;
+double Tool::vitessRelImp;
 //implementation des membre fonctions
 
 //utilitaire
@@ -96,6 +103,65 @@ double Tool::calc_positions_bords(ArrOfDouble &positions_bords)
 return dx;
 }
 
+double Tool::calc_positions_bords2(ArrOfDouble &positions_bords)
+{
+
+    double dx =myLongueurs(0)/(myNb_Noeuds(0)-1);
+    double epsi =dx/4;
+    positions_bords[0] = myOrigine(0)- myRayon + epsi;
+    positions_bords[1] = myOrigine(1)- myRayon + epsi;
+    positions_bords[2] = myOrigine(2)- myRayon + epsi;
+    positions_bords[3] = myOrigine(0)+myLongueurs(0) +myRayon - epsi;
+    positions_bords[4] = myOrigine(1)+myLongueurs(1) +myRayon - epsi;
+    positions_bords[5] = myOrigine(2)+myLongueurs(2) +myRayon - epsi;
+    //for (int i = 0; i < 6; i++)
+    //{
+    //    printf("  (a) positions_bords[%d]=%f\n",i,positions_bords[i]);
+    //}
+    return dx;
+}
+
+double Tool::module_vecteur(DoubleTab &vecteur)
+{
+    int dim =3;
+    double module = 0;
+    for (int d = 0; d < dim; d++)
+    {
+        double tmp = vecteur(d);
+        tmp *= tmp;
+        module += tmp;
+    }
+    module = sqrt(module);
+    return module;
+}
+
+double Tool::prod_scal(DoubleTab &A, DoubleTab &B)
+{
+    int dim = 3 ;
+    double prod = 0 ;
+    for (int d = 0; d < dim; d++) prod += A(d) * B(d) ;
+    return prod;
+}
+
+int Tool::checkForDuplicates(ArrOfInt &vector)
+{
+    int flag =0;
+    ArrOfInt copy_vector(vector);
+    const int size = copy_vector.size_array();
+    copy_vector.ordonne_array();
+    for (int i = 0; i < size-1; i++)
+    {
+        if (copy_vector(i)==copy_vector(i+1))
+        {
+            flag = 1;
+            Cerr << copy_vector(i) << " is duplicate !!" << finl ;
+        }
+
+       // Cerr << vector[i]<<" after sort : " << copy_vector[i]<<finl;
+    }
+
+    return flag;
+}
 
 
 //--
