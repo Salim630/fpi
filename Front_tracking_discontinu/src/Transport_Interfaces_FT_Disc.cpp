@@ -62,6 +62,7 @@
 #include <Domaine.h>
 #include <DoubleTrav.h>
 
+#include <Tool.h>
 Implemente_instanciable_sans_constructeur_ni_destructeur(Transport_Interfaces_FT_Disc,"Transport_Interfaces_FT_Disc",Transport_Interfaces_base);
 
 Implemente_ref(Transport_Interfaces_FT_Disc);
@@ -6174,6 +6175,8 @@ void Transport_Interfaces_FT_Disc::deplacer_maillage_ft_v_fluide(const double te
       // On recupere le saut de vitesse a l'interface (changement de phase)
       const Navier_Stokes_FT_Disc& ns = ref_cast(Navier_Stokes_FT_Disc, eqn_hydraulique);
       u0_ptr = ns.get_delta_vitesse_interface();
+
+
       if (u0_ptr)
         {
           const Champ_base& u0 = *u0_ptr;
@@ -6959,7 +6962,10 @@ void Transport_Interfaces_FT_Disc::nettoyer_proprietes_particules(const ArrOfInt
 // Description:
 int Transport_Interfaces_FT_Disc::sauvegarder(Sortie& os) const
 {
-  int bytes = Equation_base::sauvegarder(os);
+  int bytes = 0 ;
+
+  bytes += Equation_base::sauvegarder(os);
+  // sauvegarde de l'indicatrice cachee et des maillages d'interfaces
   {
     int special, afaire;
     const int format_xyz = EcritureLectureSpecial::is_ecriture_special(special, afaire);
@@ -6981,12 +6987,61 @@ int Transport_Interfaces_FT_Disc::sauvegarder(Sortie& os) const
       }
     bytes += variables_internes_->sauvegarder(os);
   }
-  os.flush();
 
+  os.flush();
+  //HMS Tool::  sauvegarde de num_compo
+  int isEcoulementGranulaire = 1;
+  if (isEcoulementGranulaire)
+    {
+      int special, a_faire;
+      EcritureLectureSpecial::is_ecriture_special(special, a_faire);
+      double temps=inconnue().temps();
+      const Equation_base& eqn_hydraulique = variables_internes_-> refequation_vitesse_transport.valeur();
+      const Navier_Stokes_FT_Disc& ns = ref_cast(Navier_Stokes_FT_Disc, eqn_hydraulique);
+      const Champ_Fonc& num_compo = ns.get_num_compo();
+
+      if (a_faire)
+        {
+          Nom mon_ident("num_compoChamp_Fonc_P0_VDFdom");
+          mon_ident += Nom(temps,"%e");
+          os << mon_ident << finl;
+          os << "Champ_Fonc_P0_VDF" << finl;
+          os << temps << finl;
+        }
+      else
+        {
+          // seule le maitre ecri dans le fichier xyz
+          if (Process::je_suis_maitre())
+            {
+              Nom mon_ident("num_compoChamp_Fonc_P0_VDFdom");
+              mon_ident += Nom(temps,"%e");
+              os << mon_ident << finl;
+              os << "Champ_Fonc_P0_VDF" << finl;
+              os << temps << finl;
+            }
+        }
+
+      if (special)
+        EcritureLectureSpecial::ecriture_special(num_compo,os);
+      //Cerr<< " !!! le format xyz ne parmet pas encore de sauvegarder le champ num_compo, ne pas utiliser ce format pour faire de reprise  "<<finl;
+      else
+        num_compo.valeurs().ecrit(os);
+
+      if (a_faire)
+        {
+          os.flush();
+        }
+      if (Process::je_suis_maitre())
+        Cerr << "Backup of the field Num_compo performed on time : " << Nom(temps,"%e") << finl;
+
+      bytes += 8 * num_compo.valeurs().size_array();
+
+    }
   return bytes;
 }
 int Transport_Interfaces_FT_Disc::reprendre(Entree& is)
 {
+
   Equation_base::reprendre(is);
   {
     Nom id, type_name;
@@ -7002,6 +7057,17 @@ int Transport_Interfaces_FT_Disc::reprendre(Entree& is)
     variables_internes_->reprendre(is);
     variables_internes_->injection_interfaces_last_time_ = schema_temps().temps_courant();
   }
+
+  // HMS :: reprise de num_compo
+  int isEcoulementGranulaire = 1;
+  if (isEcoulementGranulaire)
+    {
+      Nom id, type_name;
+      is >> id >> type_name;
+      Equation_base& eqn_hydraulique = variables_internes_->   refequation_vitesse_transport.valeur();
+      Navier_Stokes_FT_Disc& ns = ref_cast(Navier_Stokes_FT_Disc, eqn_hydraulique);
+      ns.reprendre_num_compo(is);
+    }
   return 1;
 }
 
@@ -8155,6 +8221,8 @@ void Transport_Interfaces_FT_Disc::calculer_vmoy_composantes_connexes(const Mail
 
 
   // HMS : recuperation des vitesses et des positions des centres
+  Tool::vitesses_compo = vitesses ;
+  Tool::positions_compo = positions ;
 
   variables_internes_ -> vitesses_compo = vitesses;
   variables_internes_ -> positions_compo = positions;

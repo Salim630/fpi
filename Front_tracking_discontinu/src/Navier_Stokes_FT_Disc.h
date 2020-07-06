@@ -62,6 +62,8 @@ public:
 
   int is_terme_gravite_rhog() const;
   const Champ_Fonc& champ_rho_faces() const;
+  const Champ_Fonc& get_num_compo() const;
+  void reprendre_num_compo(Entree& is) ;
 
   virtual void calculer_dI_dt(DoubleVect& dI_dt) const;
   const int& get_is_penalized() const;
@@ -101,9 +103,12 @@ protected:
 
 
 private:
+  //Tool:: je met ces fonction en public temporairement pour voir si ca marche
+
   const Navier_Stokes_FT_Disc_interne& variables_internes() const;
   Navier_Stokes_FT_Disc_interne& variables_internes();
 
+private:
   // Ne pas utiliser ce pointeur : utiliser variables_internes() a la place !
   Navier_Stokes_FT_Disc_interne *variables_internes_;
 

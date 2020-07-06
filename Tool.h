@@ -19,6 +19,7 @@ class Tool {
 public:
     static  std::string myCode;
     static IntTab isFirstCollision;
+    static int isMuPhaseFluide; // viscosite du fluide appliquer sur les maille diphasique et les aretes
     static DoubleTab memorisedElongation;
     static DoubleVect myOrigine;
     static DoubleVect myLongueurs;
@@ -34,6 +35,10 @@ public:
     static DoubleTab e_eff;
     static double vitessRelImp;
 
+    static DoubleTab vitesses_compo;
+    static DoubleTab positions_compo;
+    static DoubleVect num_compo_;
+    //static Champ_Inc num_compo;
 private:
     static double myMuPhase1;
     static double myMuPhase0;
@@ -71,6 +76,11 @@ public:
     static double prod_scal(DoubleTab &A, DoubleTab &B);
 
     static int checkForDuplicates(ArrOfInt &vector);
+
+
+    static void backup_myVariables();
+    static void load_myVariables();
+
 
 
 };
