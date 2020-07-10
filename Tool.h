@@ -19,7 +19,7 @@ class Tool {
 public:
     static  std::string myCode;
     static IntTab isFirstCollision;
-    static int isMuPhaseFluide; // viscosite du fluide appliquer sur les maille diphasique et les aretes
+    static int formule_mu; // viscosite du fluide appliquer sur les maille diphasique et les aretes
     static DoubleTab memorisedElongation;
     static DoubleVect myOrigine;
     static DoubleVect myLongueurs;

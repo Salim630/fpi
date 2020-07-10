@@ -196,13 +196,14 @@ static void FT_disc_calculer_champs_rho_mu_nu_dipha(const Zone_dis_base&      zo
         rho_elem[i] = rho;
         const double nu  = indic * delta_nu  + nu_phase_0; // HMS: faux, car nu = mu/rho
         nu_elem[i]  = nu;
+        Tool::formule_mu=formule_mu;
         switch(formule_mu)
           {
           case 0: // standard default method (will be removed)
             {
-              Cerr << "!! Attention !! mu phase_1 ( fluide ) sur elem diphasiques !!" << finl;
-              mu  = mu_phase_1 ;
-              Tool::isMuPhaseFluide=1;
+              //Cerr << "!! Attention !! mu phase_1 ( fluide ) sur elem diphasiques !!" << finl;
+              mu  = indic == 0 ? mu_phase_0 : mu_phase_1 ;
+
             }
             break;
           case 1: // Arithmetic average

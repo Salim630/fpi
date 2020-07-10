@@ -44,7 +44,7 @@ DoubleTab Tool::e_eff;
 
 double Tool::vitessRelImp;
 IntTab Tool::isFirstCollision;
-int Tool::isMuPhaseFluide=0;
+int Tool::formule_mu=-1;
 DoubleTab Tool::vitesses_compo;
 DoubleTab Tool::positions_compo;
 DoubleVect Tool::num_compo_;
@@ -52,18 +52,49 @@ DoubleVect Tool::num_compo_;
 //implementation des membre fonctions
 
 //utilitaire
-double Tool::calcMyViscLam(int elem1,int elem2, int elem3, int elem4){
+double Tool::calcMyViscLam(int elem1,int elem2, int elem3, int elem4)
+{
 
-	  double indicArete = 0.25*(myIndic[elem1] + myIndic[elem2]
-	                            +myIndic[elem3] + myIndic[elem4]);
+    double indicArete = 0.25 * (myIndic[elem1] + myIndic[elem2]
+                                + myIndic[elem3] + myIndic[elem4]);
+    double myViscLam=0.;
+    switch (formule_mu)
+    {
+        case 0: // standard default : fluid viscosity
+        {
+            //Cerr << "!! Attention !! mu phase_1 ( fluide ) sur elem diphasiques !!" << finl;
+            //mu  = mu_phase_1 ;
+            myViscLam = indicArete ==0 ?  myMuPhase0 : myMuPhase1;
+        }
+            break;
+        case 1: // Arithmetic average
+        {
+            //Cerr << "arithmetic" << finl;
+            //mu  = indic * delta_mu  + mu_phase_0;
+            myViscLam = myMuPhase0 + indicArete * (myMuPhase1 - myMuPhase0);
+        }
+            break;
+        case 2: // Harmonic average
+        {
+            //  Cerr << "harmonic" << finl;
+            //mu  = (mu_phase_0 * mu_phase_1)/(mu_phase_1 - indic * delta_mu);
+            myViscLam = (myMuPhase0 * myMuPhase1) / (myMuPhase1 - indicArete * (myMuPhase1 - myMuPhase0));
 
-	  double myViscLam  =isMuPhaseFluide? myMuPhase1 : (myMuPhase0 * myMuPhase1)/(myMuPhase1 - indicArete * ( myMuPhase1 - myMuPhase0));
+        }
+            break;
+        default:
+        {
+            Cerr << "The method specified for formule_mu in not recognized. \n" << finl;
+            Cerr << "you can choose : standard, arithmetic or harmonic. \n" << finl;
+            //Cerr << "We should not be here Navier_Stokes_FT_Disc::FT_disc_calculer_champs_rho_mu_nu_dipha" << finl;
+            Process::exit();
+        }
+            //printf("elem{1,2,3,4} ={%d|%d|%d|%d}\n",elem1,elem2,elem3,elem4);
+            //printf("indic{1,2,3,4={%f|%f|%f|%f}\n",myIndic[elem1],myIndic[elem2],myIndic[elem3],myIndic[elem4]);
+            //printf("indic arete=%f; mu0=%f, mu1=%f, visclam=%f\n", indicArete,myMuPhase0,myMuPhase1,myViscLam);
+    }
+    return myViscLam;
 
-    //printf("elem{1,2,3,4} ={%d|%d|%d|%d}\n",elem1,elem2,elem3,elem4);
-    //printf("indic{1,2,3,4={%f|%f|%f|%f}\n",myIndic[elem1],myIndic[elem2],myIndic[elem3],myIndic[elem4]);
-    //printf("indic arete=%f; mu0=%f, mu1=%f, visclam=%f\n", indicArete,myMuPhase0,myMuPhase1,myViscLam);
-
-	return myViscLam;
 }
 // setters and getters
 double Tool::getMyMuPhase1() {
