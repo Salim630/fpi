@@ -376,6 +376,7 @@ void Navier_Stokes_FT_Disc::set_param(Param& param)
 
   param.ajouter("rayon", &Tool::myRayon,Param::REQUIRED);
   param.ajouter("dist_act", &Tool::mySigma);
+  param.ajouter("modele_collisions_hybride", &Tool::modele_collision);
   param.ajouter("d_desactivation_lubrification", &Tool::d_desactivation_lubrification);
   param.ajouter_arr_size_predefinie("Origine", &Tool::myOrigine,Param::REQUIRED);
   param.ajouter_arr_size_predefinie("Nombre_de_Noeuds", &Tool::myNb_Noeuds,Param::REQUIRED);
@@ -2066,8 +2067,6 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
     {
       std::ofstream fout;
       fout.open("forces_composantes_connexes.txt", ios::app);
-
-
       //fout << "TEMPS: " << temps << std::endl;
       for (int compo = 0; compo < nb_compo_tot; compo++)
         {
@@ -2394,7 +2393,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
 
 
             Tool::F_now(compo, voisin) = 0;
-            if (dist_int <= sigma*0)
+            if (dist_int <= 0)
               {
                 Tool::F_now(compo, voisin) = 1;
 
@@ -2407,19 +2406,48 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
                                        : rayons_compo(compo); //bord
                     Tool::vitessRelImp=vitesseRelNorm;
 
-                    double Stb = rho_solide * 2 * rayon_eff * vitesseRelNorm / (9 * mu_fluide);
-                    Tool::e_eff(compo, voisin) = Stb > 18 ? ed * (1 - 8.65 * pow(Stb, -0.75)) : 0;
-
                     double masse_eff = CollisionParticuleParticule ? 1 / (1 / masse_compo(compo) +
                                                                           1 / masse_compo(voisin))
                                        : masse_compo(compo); //bord
 
-                    Tool::raideur(compo, voisin) = masse_eff * pow(vitesseRelNorm / sigma, 2);
+                    double Stb = rho_solide * 2 * rayon_eff * vitesseRelNorm / (9 * mu_fluide);
+
+
+                    switch ( Tool::modele_collision)
+                      {
+                      case 1: // modele hybrid
+                        {
+                          double  tau_c = 8 * dt ;
+                          Tool::e_eff(compo, voisin) = ed * exp(-35 / (Stb + 1e-6));
+                          Tool::raideur(compo, voisin) = (masse_eff * (myPI * myPI + pow(log(ed), 2))) / pow(tau_c, 2);
+                        }
+                        break;
+                      case 0: // modele a deux raideur
+                        {
+                          Tool::e_eff(compo, voisin) = Stb > 18 ? ed * (1 - 8.65 * pow(Stb, -0.75)) : 0;
+                          Tool::raideur(compo, voisin) = masse_eff * pow(vitesseRelNorm / sigma, 2);
+                        }
+
+                        break;
+
+
+                      default:
+                        Cerr << "The method specified for modele_collision in not recognized. \n" << finl;
+                        Cerr << "1 for hybride modele 0 for double stiffness ! your input is  :"<<Tool::modele_collision << " \n" << finl;
+                        Process::exit();
+                      }
+
+
+
+                    // modele a deux raideurs
+
 
                     if (Process::je_suis_maitre())
                       {
 
-                        fout << " # START!!! P" <<compo <<"V" <<voisin<<"  \n# t_imp= "<<temps<<" \n# Vrn_imp= "<<vitesseRelNorm<<"  \n# St_imp= "<< Stb  <<std::endl;
+                        fout << " # START!!! P" <<compo <<"V" <<voisin<<"  \n# t_imp= "<<temps<<" \n# Vrn_imp= "<<vitesseRelNorm<<"  \n# St_imp= "<< Stb;
+
+                        fout<<std::endl;
                         fout << "'IMP',"<<compo<<","<<voisin<<","<<temps<<","<<vitesseRelNorm << ","<<Stb <<","<<Tool::e_eff(compo, voisin) <<","<<Tool::raideur(compo, voisin) <<std::endl;
                       }
                   }
@@ -2446,6 +2474,15 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
                     if (!CollisionParticuleParticule) continue; //collision avec un bord -> pas de force sur le bord
                     forces_solide(voisin, d) += -F_spring / volumes_compo(voisin);
                   }
+
+                if(Process::je_suis_maitre() && compo==0 && !isFirstStepOfCollision )
+                  {
+                    fout << "#  COL!!! P" <<compo <<"V" <<voisin<<"   t= "<<temps;
+                    DoubleTab fc(dimension);
+                    for (int d = 0; d < dimension; d++) fc(d) = forces_solide(compo,d);
+                    fout <<"     nDistInt= "<<next_dist_int  <<"     collision_force= "<<Tool::module_vecteur(fc)<< std::endl;
+                  }
+
               }
 
 
@@ -2591,28 +2628,25 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
         Cerr << nb_connex_components << longeur_maille << print_next_dist_int << finl;
       }
 
-    if (1)
+    if (Process::je_suis_maitre())
       {
-        std::ofstream fout2;
-        fout2.open("profil_compo.txt", ios::app);
-        if (Process::je_suis_maitre())
-          {
-            fout2 << std::scientific << std::showpos;
-            fout2 << temps;
-            for (int compo = 0; compo < nb_compo_tot; compo++)
-              {
-                fout2 << '\t';
-                for (int i = 0; i < dimension; i++) fout2 << " " << positions(compo, i);
-                fout2 << "  ";
-                for (int i = 0; i < dimension; i++) fout2 << " " << vitesses(compo, i);
+        {
+          std::ofstream fout2;
+          fout2.open("profil_compo.txt", ios::app);
+          fout2 << std::scientific << std::showpos;
+          fout2 << temps;
+          for (int compo = 0; compo < nb_compo_tot; compo++)
+            {
+              fout2 << '\t';
+              for (int i = 0; i < dimension; i++) fout2 << " " << positions(compo, i);
+              fout2 << "  ";
+              for (int i = 0; i < dimension; i++) fout2 << " " << vitesses(compo, i);
+              //fout2 << "compo:" << compo << '\t' << positions(compo, 1) << '\t' << vitesses(compo, 1) << '\t';
+            }
+          fout2 << std::endl;
+          fout2.close();
+        }
 
-                //fout2 << "compo:" << compo << '\t' << positions(compo, 1) << '\t' << vitesses(compo, 1) << '\t';
-              }
-
-            fout2 << std::endl;
-
-          }
-        fout2.close();
       }
 
 

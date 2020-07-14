@@ -16,7 +16,7 @@
 
 
 //declaration des membre donnees
-std::string Tool::myCode="commicode 015.6rpo";
+std::string Tool::myCode="commicode 016amh";
 int dimension = 3;
 double Tool::myMuPhase1=-1;
 double Tool::myMuPhase0=-1;
@@ -30,6 +30,7 @@ DoubleTab Tool::memorisedElongation;
 
 double Tool::myRayon=-1;
 double Tool::mySigma=-1;
+int Tool::modele_collision=0; // valeur par defaut modele collision a deux raideur
 double Tool::d_desactivation_lubrification =0;
 
 DoubleVect Tool::myOrigine(3);

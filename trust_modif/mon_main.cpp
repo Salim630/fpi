@@ -281,7 +281,7 @@ void mon_main::dowork(const Nom& nom_du_cas)
   Cout<<"                          TRUST" << finl;
   Cout<<"                      version : 1.7.8 "  << finl;
   Cout<<"                          CEA - DEN" << finl;
-  printf("%s\n",Tool::myCode.c_str());
+  if(Process::je_suis_maitre()) printf("%s\n",Tool::myCode.c_str());
   info_atelier(Cout);
   Cout<<" ------------------------------------------------------------------" << finl;
   Cout<<" " << finl;

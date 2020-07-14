@@ -82,7 +82,7 @@ public:
     static void load_myVariables();
 
 
-
+    static int modele_collision;
 };
 
 
