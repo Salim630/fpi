@@ -83,6 +83,8 @@ public:
 
 
     static int modele_collision;
+    static int decalage_bords;
+    static DoubleVect valeurs_decalage;
 };
 
 

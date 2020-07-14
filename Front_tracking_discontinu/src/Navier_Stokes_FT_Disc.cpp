@@ -378,6 +378,10 @@ void Navier_Stokes_FT_Disc::set_param(Param& param)
   param.ajouter("dist_act", &Tool::mySigma);
   param.ajouter("modele_collisions_hybride", &Tool::modele_collision);
   param.ajouter("d_desactivation_lubrification", &Tool::d_desactivation_lubrification);
+
+  param.ajouter("decalage_bords", &Tool::decalage_bords);
+  param.ajouter_arr_size_predefinie("valeurs_decalage", &Tool::valeurs_decalage);
+
   param.ajouter_arr_size_predefinie("Origine", &Tool::myOrigine,Param::REQUIRED);
   param.ajouter_arr_size_predefinie("Nombre_de_Noeuds", &Tool::myNb_Noeuds,Param::REQUIRED);
   param.ajouter_arr_size_predefinie("Longueurs", &Tool::myLongueurs,Param::REQUIRED);

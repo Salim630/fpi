@@ -16,7 +16,7 @@
 
 
 //declaration des membre donnees
-std::string Tool::myCode="commicode 016amh";
+std::string Tool::myCode="commicode 016.1amd";
 int dimension = 3;
 double Tool::myMuPhase1=-1;
 double Tool::myMuPhase0=-1;
@@ -36,6 +36,8 @@ double Tool::d_desactivation_lubrification =0;
 DoubleVect Tool::myOrigine(3);
 DoubleVect Tool::myLongueurs(3);
 IntVect Tool::myNb_Noeuds(3);
+int Tool::decalage_bords=0;
+DoubleVect Tool::valeurs_decalage(6);
 
 int Tool::compteur_=0;
 DoubleTab Tool::F_old;
@@ -158,20 +160,40 @@ double Tool::calc_positions_bords2(ArrOfDouble &positions_bords)
 {
 
     double dx =myLongueurs(0)/(myNb_Noeuds(0)-1);
-    double epsi =dx/4;
-    positions_bords[0] = myOrigine(0)- myRayon + epsi;
-    positions_bords[1] = myOrigine(1)- myRayon + epsi;
-    positions_bords[2] = myOrigine(2)- myRayon + epsi;
-    positions_bords[3] = myOrigine(0)+myLongueurs(0) +myRayon - epsi;
-    positions_bords[4] = myOrigine(1)+myLongueurs(1) +myRayon - epsi;
-    positions_bords[5] = myOrigine(2)+myLongueurs(2) +myRayon - epsi;
+
+    switch(decalage_bords)
+    {
+        case -1:
+            valeurs_decalage=0;
+            break;
+        case 0:
+            valeurs_decalage=dx/4;
+            break;
+        case 1:
+                   //use given value in jdd
+                    break;
+
+        default:
+            Cerr << "error value of decalage_bords"  <<finl;
+            Process::exit();
+            break;
+    }
+
+
+
+    //double epsi =dx/4;
+    positions_bords[0] = myOrigine(0)- myRayon + valeurs_decalage(0);
+    positions_bords[1] = myOrigine(1)- myRayon + valeurs_decalage(1);
+    positions_bords[2] = myOrigine(2)- myRayon + valeurs_decalage(2);
+    positions_bords[3] = myOrigine(0)+myLongueurs(0) +myRayon - valeurs_decalage(3);
+    positions_bords[4] = myOrigine(1)+myLongueurs(1) +myRayon - valeurs_decalage(4);
+    positions_bords[5] = myOrigine(2)+myLongueurs(2) +myRayon - valeurs_decalage(5);
     //for (int i = 0; i < 6; i++)
     //{
     //    printf("  (a) positions_bords[%d]=%f\n",i,positions_bords[i]);
     //}
     return dx;
 }
-
 double Tool::module_vecteur(DoubleTab &vecteur)
 {
     int dim =3;
