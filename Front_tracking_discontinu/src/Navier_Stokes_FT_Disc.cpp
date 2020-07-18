@@ -380,6 +380,7 @@ void Navier_Stokes_FT_Disc::set_param(Param& param)
   param.ajouter("d_desactivation_lubrification", &Tool::d_desactivation_lubrification);
 
   param.ajouter("decalage_bords", &Tool::decalage_bords);
+  param.ajouter("force_sur_elem_diphasiques", &Tool::force_sur_elem_diphasiques);
   param.ajouter_arr_size_predefinie("valeurs_decalage", &Tool::valeurs_decalage);
 
   param.ajouter_arr_size_predefinie("Origine", &Tool::myOrigine,Param::REQUIRED);
@@ -2332,7 +2333,6 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
     //int Nc = 8;
     // FLAGS
     double CV = 1, myPI = 3.14159265358979;
-    int isPurementSolide = 1;  // si =1 force appliquer seulement sur les elements solide
     double print_next_dist_int=-1;
 //----------------------------------------------------
 
@@ -2530,15 +2530,15 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
 
     for (int elem = 0; elem < nb_elem; elem++)
       {
-        if (isPurementSolide)
+        if (Tool::force_sur_elem_diphasiques)
           {
-            //les elements diphasiques ne sont pas compris dans compo
-            num_compo[elem] = (indicatrice[elem] != 1 - indic_phase_fluide) ? -1 : 1;
+            //les elements diphasiques sont compris dans num compo
+            num_compo[elem] = (indicatrice[elem] == indic_phase_fluide) ? -1 : 1;
           }
         else
           {
-            //les elements diphasiques sont compris dans compo
-            num_compo[elem] = (indicatrice[elem] == indic_phase_fluide) ? -1 : 1;
+            //les elements diphasiques ne sont pas compris dans num compo
+            num_compo[elem] = (indicatrice[elem] != 1 - indic_phase_fluide) ? -1 : 1;
           }
       }
     num_compo.echange_espace_virtuel();

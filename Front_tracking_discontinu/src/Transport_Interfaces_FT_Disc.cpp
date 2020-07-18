@@ -350,6 +350,7 @@ void Transport_Interfaces_FT_Disc::set_param(Param& param)
   param.ajouter("vitesse_imposee_regularisee", &variables_internes_->vimp_regul) ;
   //param.ajouter("indic_faces_modifiee", &variables_internes_->indic_faces_modif) ;
   param.ajouter_non_std("indic_faces_modifiee", (this)) ;
+  param.ajouter("transport_vitesse_cg", &Tool::transport_vitesse_cg) ;
 }
 
 int Transport_Interfaces_FT_Disc::lire_motcle_non_standard(const Motcle& un_mot, Entree& is)
@@ -6990,6 +6991,9 @@ int Transport_Interfaces_FT_Disc::sauvegarder(Sortie& os) const
 
   os.flush();
   //HMS Tool::  sauvegarde de num_compo
+  // il faudrait faire quelquchose si jamais je n'ai pas de front traking dans mon probleme
+  // pour le moment je fait l'hypothese que la seule interfaces dans le domaine c'est celle des particules
+  // et qu'il exesist au moin une particule dans le domaine.
   int isEcoulementGranulaire = 1;
   if (isEcoulementGranulaire)
     {
@@ -8166,16 +8170,11 @@ void Transport_Interfaces_FT_Disc::calculer_vmoy_composantes_connexes(const Mail
     }
 
 //modif salim interpolation de la vitesse au centre de la particule solide
-  int deplacement_vcg =0;
 
-  if(deplacement_vcg)
+
+  if(Tool::transport_vitesse_cg)
     {
-      Cerr <<"before interpolation"<<finl;
-      for (int d=0; d<dim; d++)
-        {
-          Cerr <<"vitesses(0,"<<d<<"):  "<< vitesses(0,d)<<" end"<<finl;
-          Cerr <<"positions(0,"<<d<<"):  "<< positions(0,d)<<" end"<<finl;
-        }
+      Cerr <<"Transport avec vcg"<<finl;
 
       const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
       ArrOfInt elem_cg;
@@ -8185,25 +8184,59 @@ void Transport_Interfaces_FT_Disc::calculer_vmoy_composantes_connexes(const Mail
       const Champ_base& champ_vitesse = eqn_hydraulique.inconnue().valeur();
 
       FTd_vecteur3 coord;
+      int compo =0;
       for (int d=0; d<dim; d++)
         {
-          coord[d] = positions(0, d);
+          coord[d] = positions(compo, d);
         }
 
-      const int element = elem_cg(0);
-      FTd_vecteur3 vitesse;
-      interpoler_vitesse_point_vdf(champ_vitesse, coord, element, vitesse);
+      Cerr <<"befor interpolation"<<finl;
+      {
+        Cerr <<"vitesses:  " ;
+        for (int d=0; d<dim; d++) Cerr << vitesses(compo, d) << " | " ;
+        Cerr <<finl;
+        Cerr <<"positions:  " ;
+        for (int d=0; d<dim; d++) Cerr << positions(compo, d) << " | " ;
+        Cerr <<finl;
+      }
 
-      for (int d=0; d<dim; d++)
+      FTd_vecteur3 vitesse_cg;
+      const int element = elem_cg(compo);
+      if (element==-1)
         {
-          vitesses(0,d)=vitesse[d];
+          for (int d=0; d<dim; d++) vitesses(compo,d)=0;
         }
+      else
+        {
+          interpoler_vitesse_point_vdf(champ_vitesse, coord, element, vitesse_cg);
+          for (int d=0; d<dim; d++) vitesses(compo,d)=vitesse_cg[d];
+        }
+
       Cerr <<"after interpolation"<<finl;
-      for (int d=0; d<dim; d++)
-        {
-          Cerr <<"vitesses(0,"<<d<<"):  "<< vitesses(0,d)<<" end"<<finl;
-          Cerr <<"positions(0,"<<d<<"):  "<< positions(0,d)<<" end"<<finl;
-        }
+      {
+        Cerr <<"vitesses:  " ;
+        for (int d=0; d<dim; d++) Cerr << vitesses(compo, d) << " | " ;
+        Cerr <<finl;
+        Cerr <<"positions:  " ;
+        for (int d=0; d<dim; d++) Cerr << positions(compo, d) << " | " ;
+        Cerr <<finl;
+      }
+      mp_sum_for_each_item(vitesses);
+      // {
+      //   DoubleVect s; // tab_divide prend DoubleVect, pas ArrOfDouble...
+      //   s.ref_array(surfaces_compo);
+      //   tab_divide_any_shape(vitesses, s);
+      // }
+
+      Cerr <<"after summation"<<finl;
+      {
+        Cerr <<"vitesses:  " ;
+        for (int d=0; d<dim; d++) Cerr << vitesses(compo, d) << " | " ;
+        Cerr <<finl;
+        Cerr <<"positions:  " ;
+        for (int d=0; d<dim; d++) Cerr << positions(compo, d) << " | " ;
+        Cerr <<finl;
+      }
     }
 // fin modif
   else

@@ -37,6 +37,8 @@ DoubleVect Tool::myOrigine(3);
 DoubleVect Tool::myLongueurs(3);
 IntVect Tool::myNb_Noeuds(3);
 int Tool::decalage_bords=0;
+int Tool::transport_vitesse_cg=0;
+int Tool::force_sur_elem_diphasiques=0;
 DoubleVect Tool::valeurs_decalage(6);
 
 int Tool::compteur_=0;

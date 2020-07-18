@@ -85,6 +85,8 @@ public:
     static int modele_collision;
     static int decalage_bords;
     static DoubleVect valeurs_decalage;
+    static int transport_vitesse_cg;
+    static int force_sur_elem_diphasiques;
 };
 
 
