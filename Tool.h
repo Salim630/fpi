@@ -82,7 +82,7 @@ public:
     static void load_myVariables();
 
 
-    static int modele_collision;
+    static int modele_lubrification;
     static int decalage_bords;
     static DoubleVect valeurs_decalage;
     static int transport_vitesse_cg;

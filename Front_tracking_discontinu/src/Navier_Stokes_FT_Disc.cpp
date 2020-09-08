@@ -91,8 +91,7 @@ public:
   Champ_Fonc terme_convection;
   Champ_Fonc terme_source;
   Champ_Fonc terme_source_interfaces;
-  Champ_Fonc terme_source_collisions;
-  Champ_Fonc  num_compo;
+
   Champ_Fonc indicatrice_p1b;
   Champ_Fonc gradient_indicatrice;
   Champ_Fonc potentiel_faces;
@@ -104,6 +103,12 @@ public:
   Champ_Fonc mpoint_vap;
   // Variation temporelle indicatrice de phase
   Champ_Fonc derivee_temporelle_indicatrice;
+
+  //-----------------
+  Champ_Fonc terme_source_collisions;
+  Champ_Fonc  num_compo;
+  Motcle modele_collisions_;
+  //-----------------
 
   LIST(REF(Champ_base)) liste_champs_compris;
 
@@ -376,8 +381,9 @@ void Navier_Stokes_FT_Disc::set_param(Param& param)
 
   param.ajouter("rayon", &Tool::myRayon,Param::REQUIRED);
   param.ajouter("dist_act", &Tool::mySigma);
-  param.ajouter("modele_collisions_hybride", &Tool::modele_collision);
+  param.ajouter("modele_lubrification", &Tool::modele_lubrification);
   param.ajouter("d_desactivation_lubrification", &Tool::d_desactivation_lubrification);
+  param.ajouter("modele_collisions", &variables_internes().modele_collisions_,Param::REQUIRED);
 
   param.ajouter("decalage_bords", &Tool::decalage_bords);
   param.ajouter("force_sur_elem_diphasiques", &Tool::force_sur_elem_diphasiques);
@@ -387,7 +393,18 @@ void Navier_Stokes_FT_Disc::set_param(Param& param)
   param.ajouter_arr_size_predefinie("Nombre_de_Noeuds", &Tool::myNb_Noeuds,Param::REQUIRED);
   param.ajouter_arr_size_predefinie("Longueurs", &Tool::myLongueurs,Param::REQUIRED);
 }
-
+int Navier_Stokes_FT_Disc::modele_collisions() const
+{
+  const Motcle& le_mot_cle =variables_internes().modele_collisions_;
+  if (le_mot_cle == "ressort_amorti")
+    return 0;
+  else if (le_mot_cle == "double_raideurs")
+    return 1;
+  else if (le_mot_cle == "hybrid" )
+    return 2;
+  else
+    return -1;
+}
 int Navier_Stokes_FT_Disc::lire_motcle_non_standard(const Motcle& mot, Entree& is)
 {
   if (mot=="diffusion")
@@ -1360,7 +1377,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_superficielles(const Maillage_
   }
 }
 
-//<editor-fold desc="Ancien modele">
+//<editor-fold desc="Ancien modele"> Todo : a supprimer
 
 void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& indicatrice, DoubleTab& valeurs_champ,
                                                              double& FC)
@@ -2147,521 +2164,592 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
                                                               double& FC)
 {
 
-  {
-    Tool::compteur_ += 1;
-    Cerr << "Navier_Stokes_FT_Disc::calculer_champ_forces_collisions" << finl;
-    //auto start = high_resolution_clock::now();
 
-    REF(Transport_Interfaces_FT_Disc) &refeq_transport = variables_internes().ref_eq_interf_proprietes_fluide;
-    const Transport_Interfaces_FT_Disc& eq_transport = refeq_transport.valeur();
-    const Maillage_FT_Disc& maillage = eq_transport.maillage_interface();
-    const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
-    const Zone_VF& zone_vdf = ref_cast(Zone_VDF, zone_dis().valeur());
-    // recuperation des vitesse compo et des centres de gravites
+//
 
-    DoubleTab& positions = Tool::positions_compo;
-    DoubleTab& vitesses = Tool::vitesses_compo;
+//<editor-fold desc="Determiniations des vitesses et positions de chaques particule">
+  Tool::compteur_ += 1;
+  Cerr << "Navier_Stokes_FT_Disc::calculer_champ_forces_collisions" << finl;
+  //auto start = high_resolution_clock::now();
 
-    const int nb_facettes = maillage.nb_facettes();
-    ArrOfInt compo_connexes_facettes(nb_facettes); // Init a zero
-    int n = search_connex_components_local_FT(maillage, compo_connexes_facettes); //
-    int nb_compo_tot = compute_global_connex_components_FT(maillage, compo_connexes_facettes, n); //
+  REF(Transport_Interfaces_FT_Disc) &refeq_transport = variables_internes().ref_eq_interf_proprietes_fluide;
+  const Transport_Interfaces_FT_Disc& eq_transport = refeq_transport.valeur();
+  const Maillage_FT_Disc& maillage = eq_transport.maillage_interface();
+  const Zone_VF& zone_vf = ref_cast(Zone_VF, zone_dis().valeur());
+  const Zone_VF& zone_vdf = ref_cast(Zone_VDF, zone_dis().valeur());
+  // recuperation des vitesse compo et des centres de gravites
 
-    int nb_bord = 2 * dimension;
-    ArrOfDouble positions_bords(nb_bord);
+  DoubleTab& positions = Tool::positions_compo;
+  DoubleTab& vitesses = Tool::vitesses_compo;
 
-    assert(nb_compo_tot != 0);
-    // Cerr << " Zone 1" << finl ;
-    // si vitesses na pas les bonnes dimension (premiere pas de temps, en calcule la position des centre de gravite et
-    // on initialise les vitesse des inclusions a zero
-    if ((vitesses.dimension(0) != nb_compo_tot) || (vitesses.dimension(1) != dimension))
-      if (Tool::compteur_ == 1)
-        {
-          // on initialise les vitesse avec 0
-          positions.resize(nb_compo_tot, dimension);
-          vitesses.resize(nb_compo_tot, dimension);
-          vitesses = 0;
+  const int nb_facettes = maillage.nb_facettes();
+  ArrOfInt compo_connexes_facettes(nb_facettes); // Init a zero
+  int n = search_connex_components_local_FT(maillage, compo_connexes_facettes); //
+  int nb_compo_tot = compute_global_connex_components_FT(maillage, compo_connexes_facettes, n); //
 
-          // calcule des centre de gravite pour les composantes
-          assert(nb_compo_tot == positions.dimension(0));
+  int nb_bord = 2 * dimension;
+  ArrOfDouble positions_bords(nb_bord);
 
-          const int dim = positions.dimension(1); //
-          const ArrOfDouble& surface_facettes = maillage.get_update_surface_facettes();
-          const IntTab& facettes = maillage.facettes();
-          const DoubleTab& sommets = maillage.sommets();
-          assert(facettes.dimension(1) == dim);
-
-          // Surface totale de chaque composante connexe, initialise a zero
-          ArrOfDouble surfaces_compo(nb_compo_tot);
-          positions = 0.;
-
-          // Calcul du centre de gravite de la composante connexe
-          //  (centre de gravite de la surface, pas du volume)
-          const int nb_facettes_tot = facettes.dimension_tot(0);
-          {
-            for (int i = 0; i < nb_facettes_tot; i++)
-              {
-                if (maillage.facette_virtuelle(i)) continue;
-
-                const int compo = compo_connexes_facettes[i];
-                const double surface = surface_facettes[i];
-                surfaces_compo[compo] += surface;
-                // Centre de gravite de la facette, pondere par la surface
-                for (int j = 0; j < dim; j++)
-                  {
-                    // Indice du sommet
-                    const int s = facettes(i, j);
-                    for (int k = 0; k < dim; k++)
-                      {
-                        // On divisera par dim a la fin:
-                        positions(compo, k) += surface * sommets(s, k);
-                      }
-                  }
-              }
-            mp_sum_for_each_item(surfaces_compo);
-            mp_sum_for_each_item(positions);
-
-            positions *= (1. / dim);
-            DoubleVect s; // tab_divide prend DoubleVect, pas ArrOfDouble...
-            s.ref_array(surfaces_compo);
-            tab_divide_any_shape(positions, s);
-            //---fin calcul surface_compo et position_centre_gravite_compo ( a rassembler dans une focntion)---//
-          }
-
-
-        }
-
-
-    ArrOfInt elem_cg;
-    zone_vf.zone().chercher_elements(positions, elem_cg);
-
-
-    //initialisation
-    DoubleTab correct_vitesses(nb_compo_tot, dimension), correct_positions(nb_compo_tot, dimension);
-    ArrOfInt copy_elem_cg, correctNum(nb_compo_tot);
-    Tool::F_now.resize(nb_compo_tot, nb_compo_tot + nb_bord);
-    Tool::F_now = 0;
+  assert(nb_compo_tot != 0);
+  // Cerr << " Zone 1" << finl ;
+  // si vitesses na pas les bonnes dimension (premiere pas de temps, en calcule la position des centre de gravite et
+  // on initialise les vitesse des inclusions a zero
+  if ((vitesses.dimension(0) != nb_compo_tot) || (vitesses.dimension(1) != dimension))
     if (Tool::compteur_ == 1)
       {
-        Tool::F_old.resize(nb_compo_tot, nb_compo_tot + nb_bord);
-        Tool::raideur.resize(nb_compo_tot, nb_compo_tot + nb_bord);
-        Tool::e_eff.resize(nb_compo_tot, nb_compo_tot + nb_bord);
+        // on initialise les vitesse avec 0
+        positions.resize(nb_compo_tot, dimension);
+        vitesses.resize(nb_compo_tot, dimension);
+        vitesses = 0;
 
-        Tool::F_old = 0;
-        Tool::raideur = -1;
-        Tool::e_eff = -1;
-      }
-    else
-      {
-        // correspandance entre le bon numero eulerian au temps precedant et le mauvais numero lagrangien actuel
-        DoubleVect old_num_compo = variables_internes().num_compo.valeur().valeurs();
+        // calcule des centre de gravite pour les composantes
+        assert(nb_compo_tot == positions.dimension(0));
 
+        const int dim = positions.dimension(1); //
+        const ArrOfDouble& surface_facettes = maillage.get_update_surface_facettes();
+        const IntTab& facettes = maillage.facettes();
+        const DoubleTab& sommets = maillage.sommets();
+        assert(facettes.dimension(1) == dim);
+
+        // Surface totale de chaque composante connexe, initialise a zero
+        ArrOfDouble surfaces_compo(nb_compo_tot);
+        positions = 0.;
+
+        // Calcul du centre de gravite de la composante connexe
+        //  (centre de gravite de la surface, pas du volume)
+        const int nb_facettes_tot = facettes.dimension_tot(0);
         {
-
-          zone_vf.zone().chercher_elements(positions, copy_elem_cg);
-
-          for (int wrong_num = 0; wrong_num < nb_compo_tot; wrong_num++)
+          for (int i = 0; i < nb_facettes_tot; i++)
             {
-              int elem = elem_cg[wrong_num];
-              int correct_num = elem == -1 ? -1 : old_num_compo[elem]; // TODO  verefier conversion int <-> double
-              correctNum(wrong_num) = correct_num;
+              if (maillage.facette_virtuelle(i)) continue;
 
+              const int compo = compo_connexes_facettes[i];
+              const double surface = surface_facettes[i];
+              surfaces_compo[compo] += surface;
+              // Centre de gravite de la facette, pondere par la surface
+              for (int j = 0; j < dim; j++)
+                {
+                  // Indice du sommet
+                  const int s = facettes(i, j);
+                  for (int k = 0; k < dim; k++)
+                    {
+                      // On divisera par dim a la fin:
+                      positions(compo, k) += surface * sommets(s, k);
+                    }
+                }
             }
-          mp_max_for_each_item(correctNum);
-          int isduplicateValue = Tool::checkForDuplicates(correctNum);
-          if (isduplicateValue == 1) exit("ERROR: duplicate value");
+          mp_sum_for_each_item(surfaces_compo);
+          mp_sum_for_each_item(positions);
+
+          positions *= (1. / dim);
+          DoubleVect s; // tab_divide prend DoubleVect, pas ArrOfDouble...
+          s.ref_array(surfaces_compo);
+          tab_divide_any_shape(positions, s);
+          //---fin calcul surface_compo et position_centre_gravite_compo ( a rassembler dans une focntion)---//
         }
 
-        for (int bad_compo = 0; bad_compo < nb_compo_tot; bad_compo++)
-          {
 
-            int good_compo = correctNum[bad_compo];
-
-            for (int d = 0; d < dimension; d++)
-              {
-
-
-                correct_vitesses(good_compo, d) = vitesses(bad_compo, d);
-                correct_positions(good_compo, d) = positions(bad_compo, d);
-              }
-          }
-
-        positions = correct_positions;
-        vitesses = correct_vitesses;
-        zone_vf.zone().chercher_elements(positions, elem_cg);
       }
 
 
-
-// ----------
-
-
+  ArrOfInt elem_cg;
+  zone_vf.zone().chercher_elements(positions, elem_cg);
 
 
-    const IntVect& orientation = zone_vdf.orientation();
+  //initialisation
+  DoubleTab correct_vitesses(nb_compo_tot, dimension), correct_positions(nb_compo_tot, dimension);
+  ArrOfInt copy_elem_cg, correctNum(nb_compo_tot);
+  Tool::F_now.resize(nb_compo_tot, nb_compo_tot + nb_bord);
+  Tool::F_now = 0;
+  if (Tool::compteur_ == 1)
+    {
+      Tool::F_old.resize(nb_compo_tot, nb_compo_tot + nb_bord);
+      Tool::raideur.resize(nb_compo_tot, nb_compo_tot + nb_bord);
+      Tool::e_eff.resize(nb_compo_tot, nb_compo_tot + nb_bord);
 
-    //  ----- proprietes particules  -------------
-    ArrOfDouble rayons_compo(nb_compo_tot);
-    ArrOfDouble volumes_compo(nb_compo_tot);
-    ArrOfDouble masse_compo(nb_compo_tot);
+      Tool::F_old = 0;
+      Tool::raideur = -1;
+      Tool::e_eff = -1;
+    }
+  else
+    {
+      // correspandance entre le bon numero eulerian au temps precedant et le mauvais numero lagrangien actuel
+      DoubleVect old_num_compo = variables_internes().num_compo.valeur().valeurs();
+
+      {
+
+        zone_vf.zone().chercher_elements(positions, copy_elem_cg);
+
+        for (int wrong_num = 0; wrong_num < nb_compo_tot; wrong_num++)
+          {
+            int elem = elem_cg[wrong_num];
+            int correct_num = elem == -1 ? -1 : old_num_compo[elem]; // TODO  verefier conversion int <-> double
+            correctNum(wrong_num) = correct_num;
+
+          }
+        mp_max_for_each_item(correctNum);
+        int isduplicateValue = Tool::checkForDuplicates(correctNum);
+        if (isduplicateValue == 1) exit("ERROR: duplicate value");
+      }
+
+      for (int bad_compo = 0; bad_compo < nb_compo_tot; bad_compo++)
+        {
+
+          int good_compo = correctNum[bad_compo];
+
+          for (int d = 0; d < dimension; d++)
+            {
+
+
+              correct_vitesses(good_compo, d) = vitesses(bad_compo, d);
+              correct_positions(good_compo, d) = positions(bad_compo, d);
+            }
+        }
+
+      positions = correct_positions;
+      vitesses = correct_vitesses;
+      zone_vf.zone().chercher_elements(positions, elem_cg);
+    }
+  //</editor-fold>
+
+
+//<editor-fold desc="Recuperation des proprietes diphasiques">
+  const IntVect& orientation = zone_vdf.orientation();
+  //  ----- proprietes particules  -------------
+  ArrOfDouble rayons_compo(nb_compo_tot);
+  ArrOfDouble volumes_compo(nb_compo_tot);
+  ArrOfDouble masse_compo(nb_compo_tot);
 
 //--------------------------------------------------
-    const Fluide_Diphasique& mon_fluide = fluide_diphasique();
+  const Fluide_Diphasique& mon_fluide = fluide_diphasique();
 
-    const double dt = schema_temps().pas_de_temps();
-    const double temps = schema_temps().temps_courant();
+  const double dt = schema_temps().pas_de_temps();
+  const double temps = schema_temps().temps_courant();
 
-    const double rho_solide = mon_fluide.fluide_phase(0).masse_volumique().valeurs()(0, 0);
-    const double rho_fluide = mon_fluide.fluide_phase(1).masse_volumique().valeurs()(0, 0);
-    const double mu_fluide =
-      rho_fluide * mon_fluide.fluide_phase(1).viscosite_cinematique().valeur().valeurs()(0, 0);
+  const double rho_solide = mon_fluide.fluide_phase(0).masse_volumique().valeurs()(0, 0);
+  const double rho_fluide = mon_fluide.fluide_phase(1).masse_volumique().valeurs()(0, 0);
+  const double mu_fluide =
+    rho_fluide * mon_fluide.fluide_phase(1).viscosite_cinematique().valeur().valeurs()(0, 0);
 
-
-
-    int indic_phase_fluide = 1; //, indic_phase_solide=0; // TODO a generaliser
-
-
-
-    double longeur_maille = Tool::calc_positions_bords2(positions_bords);
+  int indic_phase_fluide = 1; //, indic_phase_solide=0; // TODO a generaliser
+  double longeur_maille = Tool::calc_positions_bords2(positions_bords);
 // -------------------------------------------------
 
 
 // parametre du modele -----------------------------
-    double rayon = Tool::myRayon;
-    double sigma = Tool::mySigma;
-    double ed = 0.97;
-    //int Nc = 8;
-    // FLAGS
-    double CV = 1, myPI = 3.14159265358979;
-    double print_next_dist_int=-1;
+  double rayon = Tool::myRayon;
+  double sigma = Tool::mySigma; //distance de  d'enfoncement max (Ec=0, Epe=max)
+  double ed = 0.97;
+  //int Nc = 8;
+  // FLAGS
+  double CV = 1, myPI = 3.14159265358979;
+  double print_next_dist_int=-1;
 //----------------------------------------------------
 
-    for (int compo = 0; compo < nb_compo_tot; compo++)
-      {
-        rayons_compo[compo] = rayon;
-        volumes_compo[compo] = 4 * myPI * pow(rayons_compo[compo], 3) / 3;
-        masse_compo[compo] = volumes_compo[compo] * rho_solide;
-      }
-    DoubleTab forces_solide(nb_compo_tot, dimension);
-
-    std::ofstream fout;
-    fout.open("details_colisions.txt", ios::app);
-    fout << std::scientific;
+  for (int compo = 0; compo < nb_compo_tot; compo++)
+    {
+      rayons_compo[compo] = rayon;
+      volumes_compo[compo] = 4 * myPI * pow(rayons_compo[compo], 3) / 3;
+      masse_compo[compo] = volumes_compo[compo] * rho_solide;
+    }
 
 
-    for (int compo = 0; compo < nb_compo_tot; compo++)
-      {
-
-        //-------------- contribution des particules -----------------------
-        for (int voisin = compo + 1; voisin < nb_compo_tot + nb_bord; voisin++)
-          {
-            DoubleTab dX(dimension), dU(dimension);
-            dX = 0;
-            dU = 0;
-            int CollisionParticuleParticule = voisin < nb_compo_tot;
-            if (CollisionParticuleParticule)
-              {
-                for (int d = 0; d < dimension; d++)
-                  {
-                    dX(d) = positions(compo, d) - positions(voisin, d);
-                    dU(d) = vitesses(compo, d) - vitesses(voisin, d);
-                  }
-
-              }
-            else
-              {
-                int bord = voisin - nb_compo_tot;
-                int ori = bord < dimension ? bord : bord - dimension;
-                dX(ori) = positions(compo, ori) - positions_bords(bord);
-                for (int d = 0; d < dimension; d++) dU(d) = vitesses(compo, d);
-              }
-
-            double dist_cg = Tool::module_vecteur(dX);
-
-            if (dist_cg == 0)
-              {
-                Cerr << "ERROR : dist_cg = 0 entre " << compo << " et " << voisin << finl;
-                exit();
-              }
-            double dist_int = CollisionParticuleParticule ? dist_cg - (rayons_compo(compo) + rayons_compo(voisin)) :
-                              dist_cg - 2 * rayons_compo(compo);
-
-            // --- calculer ici pour postraitement
-            DoubleTab norm(dimension);
-            for (int d = 0; d < dimension; d++) norm(d) = dX(d) / dist_cg;
-            double prod_sacl = Tool::prod_scal(dX, dU);
-            DoubleTab dUn(dimension);
-            for (int d = 0; d < dimension; d++) dUn(d) = (prod_sacl / dist_cg) * norm(d);
-            double vitesseRelNorm = Tool::module_vecteur(dUn);
-            //----------------------------
+  std::ofstream fout;
+  fout.open("details_colisions.txt", ios::app);
+  fout << std::scientific;
+  //</editor-fold>
 
 
-            Tool::F_now(compo, voisin) = 0;
-            if (dist_int <= 0)
-              {
-                Tool::F_now(compo, voisin) = 1;
+//<editor-fold desc="Calcule des forces de collisions">
+  DoubleTab forces_solide(nb_compo_tot, dimension);
+  for (int compo = 0; compo < nb_compo_tot; compo++)
+    {
 
-                int isFirstStepOfCollision = Tool::F_now(compo, voisin) > Tool::F_old(compo, voisin);
-                if (isFirstStepOfCollision)
-                  {
+      for (int voisin = compo + 1; voisin < nb_compo_tot + nb_bord; voisin++)
+        {
 
-                    double rayon_eff = CollisionParticuleParticule ? 0.5 *
-                                       (rayons_compo(compo) + rayons_compo(voisin))
-                                       : rayons_compo(compo); //bord
-                    Tool::vitessRelImp=vitesseRelNorm;
+          //<editor-fold desc="Calcule de la distance entre deux interfaces">
+          DoubleTab dX(dimension), dU(dimension);
+          dX = 0;
+          dU = 0;
+          int CollisionParticuleParticule = voisin < nb_compo_tot;
+          if (CollisionParticuleParticule)
+            {
+              for (int d = 0; d < dimension; d++)
+                {
+                  dX(d) = positions(compo, d) - positions(voisin, d);
+                  dU(d) = vitesses(compo, d) - vitesses(voisin, d);
+                }
 
-                    double masse_eff = CollisionParticuleParticule ? 1 / (1 / masse_compo(compo) +
-                                                                          1 / masse_compo(voisin))
-                                       : masse_compo(compo); //bord
+            }
+          else
+            {
+              int bord = voisin - nb_compo_tot;
+              int ori = bord < dimension ? bord : bord - dimension;
+              dX(ori) = positions(compo, ori) - positions_bords(bord);
+              for (int d = 0; d < dimension; d++) dU(d) = vitesses(compo, d);
+            }
 
-                    double Stb = rho_solide * 2 * rayon_eff * vitesseRelNorm / (9 * mu_fluide);
+          double dist_cg = Tool::module_vecteur(dX);
+          if (dist_cg == 0)
+            {
+              Cerr << "ERROR : dist_cg = 0 entre " << compo << " et " << voisin << finl;
+              exit();
+            }
+
+          double dist_int = CollisionParticuleParticule ? dist_cg - (rayons_compo(compo) + rayons_compo(voisin)) :
+                            dist_cg - 2 * rayons_compo(compo);
+          //</editor-fold>
 
 
-                    switch ( Tool::modele_collision)
+          //<editor-fold desc="Calcule de la norme et de la vitesse relative normale">
+          DoubleTab norm(dimension);
+          for (int d = 0; d < dimension; d++) norm(d) = dX(d) / dist_cg;
+          double prod_sacl = Tool::prod_scal(dX, dU);
+          DoubleTab dUn(dimension);
+          for (int d = 0; d < dimension; d++) dUn(d) = (prod_sacl / dist_cg) * norm(d);
+          double vitesseRelNorm = Tool::module_vecteur(dUn);
+          //</editor-fold>
+
+          //----------------------------
+
+          //<editor-fold desc="Modele de lubrification">
+          int isModeleLubrification =Tool::modele_lubrification ;
+          double d_int = fabs(dist_int) / rayons_compo[compo];
+          double d_act = 2.0 * longeur_maille / rayons_compo[compo];
+          double d_sat = 0.1 * longeur_maille / rayons_compo[compo];
+
+          if (isModeleLubrification && d_int <= d_act )
+            {
+
+
+              double lambda     = CollisionParticuleParticule ? 0.5 / d_int - 9 * log(d_int) / 20 - 3 * d_int * log(d_int) / 56 : 1 / d_int - log(d_int) / 5 - d_int * log(d_int) / 21;
+              double lambda_act = CollisionParticuleParticule ? 0.5 / d_act - 9 * log(d_act) / 20 - 3 * d_act * log(d_act) / 56 : 1 / d_act - log(d_act) / 5 - d_act * log(d_act) / 21;
+              double lambda_sat = CollisionParticuleParticule ? 0.5 / d_sat - 9 * log(d_sat) / 20 - 3 * d_sat * log(d_sat) / 56 : 1 / d_sat - log(d_sat) / 5 - d_sat * log(d_sat) / 21;
+
+              double delta_lambda=0;
+
+              if (d_sat < d_int && d_int <= d_act)
+                delta_lambda= (lambda - lambda_act);
+
+
+              if (0 < d_int && d_int <= d_sat)
+                delta_lambda= (lambda_sat - lambda_act);
+
+
+              for (int d = 0; d < dimension; d++)
+                {
+                  double force_lubrification = -6 * myPI * mu_fluide * rayons_compo[compo] * dUn(d) * delta_lambda;
+                  Cerr << "(*) d: " << d << "  force_lubrification:  " <<force_lubrification <<finl;
+                  continue;
+                  forces_solide(compo, d) += +force_lubrification / volumes_compo(compo);
+                  if (!CollisionParticuleParticule) continue; //collision avec un bord -> pas de force sur le bord
+                  forces_solide(voisin, d) += -force_lubrification / volumes_compo(voisin);
+                }
+
+
+            }
+          //</editor-fold>
+
+
+          Tool::F_now(compo, voisin) = 0;
+          if (dist_int <= 0) //contact
+            {
+
+              Tool::F_now(compo, voisin) = 1;
+              int isFirstStepOfCollision = Tool::F_now(compo, voisin) > Tool::F_old(compo, voisin);
+
+              //<editor-fold desc="schema semi implicte">
+              DoubleTab next_dX(dimension);
+              for (int d = 0; d < dimension; d++) next_dX(d) = dX(d) + dt * dU(d);
+              double next_dist_cg = Tool::module_vecteur(next_dX);
+              double next_dist_int = CollisionParticuleParticule ? next_dist_cg -
+                                     (rayons_compo(compo) + rayons_compo(voisin)) :
+                                     next_dist_cg - 2 * rayons_compo(compo);
+              print_next_dist_int= next_dist_int;
+              //</editor-fold>
+
+              //new writing
+              if(1)
+                {
+                  double rayon_eff = CollisionParticuleParticule ? 0.5 *
+                                     (rayons_compo(compo) + rayons_compo(voisin))
+                                     : rayons_compo(compo); //bord
+
+                  double masse_eff = CollisionParticuleParticule ? 1 / (1 / masse_compo(compo) +
+                                                                        1 / masse_compo(voisin))
+                                     : masse_compo(compo); //bord
+
+                  double Stb = rho_solide * 2 * rayon_eff * vitesseRelNorm / (9 * mu_fluide);
+
+                  DoubleTab force_contact(dimension);
+                  const int modele=modele_collisions();
+                  switch (modele)
+                    {
+
+                    case 0:
                       {
-                      case 1: // modele hybrid
-                        {
-                          double  tau_c = 8 * dt ;
-                          Tool::e_eff(compo, voisin) = ed * exp(-35 / (Stb + 1e-6));
-                          Tool::raideur(compo, voisin) = (masse_eff * (myPI * myPI + pow(log(ed), 2))) / pow(tau_c, 2);
-                        }
-                        break;
-                      case 0: // modele a deux raideur
-                        {
-                          Tool::e_eff(compo, voisin) = Stb > 18 ? ed * (1 - 8.65 * pow(Stb, -0.75)) : 0;
-                          Tool::raideur(compo, voisin) = masse_eff * pow(vitesseRelNorm / sigma, 2);
-                        }
+                        //Cerr << "Modele ressort_amorti. \n" << finl;
+                        int Nc=8;
+                        double raideur = (masse_eff * (myPI * myPI + pow(log(ed), 2))) / pow(Nc * dt, 2);
+                        double amortisseur = -1*(masse_eff * log(ed)) / (Nc * dt);
 
-                        break;
-
-
-                      default:
-                        Cerr << "The method specified for modele_collision in not recognized. \n" << finl;
-                        Cerr << "1 for hybride modele 0 for double stiffness ! your input is  :"<<Tool::modele_collision << " \n" << finl;
-                        Process::exit();
+                        for (int d = 0; d < dimension; d++)
+                          force_contact(d)=-1 * raideur * next_dist_int * norm(d) -1*amortisseur*dUn(d);
                       }
+                      break;
 
-
-
-                    // modele a deux raideurs
-
-
-                    if (Process::je_suis_maitre())
+                    case 1:
                       {
+                        //Cerr << "Modele a deux raideurs. \n" << finl;
 
-                        fout << " # START!!! P" <<compo <<"V" <<voisin<<"  \n# t_imp= "<<temps<<" \n# Vrn_imp= "<<vitesseRelNorm<<"  \n# St_imp= "<< Stb;
+                        //int isFirstStepOfCollision = Tool::F_now(compo, voisin) > Tool::F_old(compo, voisin);
+                        if (isFirstStepOfCollision)
+                          {
+                            Tool::e_eff(compo, voisin) = Stb > 18 ? ed * (1 - 8.65 * pow(Stb, -0.75)) : 0;
+                            Tool::raideur(compo, voisin) = masse_eff * pow(vitesseRelNorm / sigma, 2);
+                          }
+                        int isPhasePenetration = prod_sacl <= 0;
+                        double e_eff = isPhasePenetration ? 1 : Tool::e_eff(compo, voisin);
+                        double raideur = Tool::raideur(compo, voisin);
 
-                        fout<<std::endl;
-                        fout << "'IMP',"<<compo<<","<<voisin<<","<<temps<<","<<vitesseRelNorm << ","<<Stb <<","<<Tool::e_eff(compo, voisin) <<","<<Tool::raideur(compo, voisin) <<std::endl;
+                        for (int d = 0; d < dimension; d++)
+                          force_contact(d)=-1 * e_eff * e_eff * raideur * next_dist_int * norm(d);
                       }
-                  }
+                      break;
 
-                DoubleTab next_dX(dimension);
-                for (int d = 0; d < dimension; d++) next_dX(d) = dX(d) + dt * dU(d);
+                    case 2:
+                      {
+                        //Cerr << "Modele hybrid. \n" << finl;
 
-                double next_dist_cg = Tool::module_vecteur(next_dX);
-                double next_dist_int = CollisionParticuleParticule ? next_dist_cg -
-                                       (rayons_compo(compo) + rayons_compo(voisin)) :
-                                       next_dist_cg - 2 * rayons_compo(compo);
-                print_next_dist_int= next_dist_int;
+                        //int isFirstStepOfCollision = Tool::F_now(compo, voisin) > Tool::F_old(compo, voisin);
+                        if (isFirstStepOfCollision)
+                          {
+                            double  tau_c = 8 * dt ;
+                            Tool::e_eff(compo, voisin) = ed * exp(-35 / (Stb + 1e-6));
+                            Tool::raideur(compo, voisin) = (masse_eff * (myPI * myPI + pow(log(ed), 2))) / pow(tau_c, 2);
+                          }
+                        int isPhasePenetration = prod_sacl <= 0;
+                        double e_eff = isPhasePenetration ? 1 : Tool::e_eff(compo, voisin);
+                        double raideur = Tool::raideur(compo, voisin);
 
+                        for (int d = 0; d < dimension; d++)
+                          force_contact(d)=-1 * e_eff * e_eff * raideur * next_dist_int * norm(d);
 
-                int isPhasePenetration = prod_sacl <= 0;
-                double e_eff = isPhasePenetration ? 1 : Tool::e_eff(compo, voisin);
-                double raideur = Tool::raideur(compo, voisin);
-
-
-                for (int d = 0; d < dimension; d++)
-                  {
-                    double F_spring = -1 * e_eff * e_eff * raideur * next_dist_int * norm(d);
-                    forces_solide(compo, d) += +F_spring / volumes_compo(compo);
-                    if (!CollisionParticuleParticule) continue; //collision avec un bord -> pas de force sur le bord
-                    forces_solide(voisin, d) += -F_spring / volumes_compo(voisin);
-                  }
-
-                if(Process::je_suis_maitre() && compo==0 && !isFirstStepOfCollision )
-                  {
-                    fout << "#  COL!!! P" <<compo <<"V" <<voisin<<"   t= "<<temps;
-                    DoubleTab fc(dimension);
-                    for (int d = 0; d < dimension; d++) fc(d) = forces_solide(compo,d);
-                    fout <<"     nDistInt= "<<next_dist_int  <<"     collision_force= "<<Tool::module_vecteur(fc)<< std::endl;
-                  }
-
-              }
+                      }
+                      break;
 
 
-            int isLastCollision = Tool::F_now(compo, voisin) < Tool::F_old(compo, voisin);
-            if (isLastCollision)
-              {
-                //double  e_calc = vitesseRelNorm/Tool::vitessRelImp ;
-                if (Process::je_suis_maitre())
-                  {
-                    fout << "#  END!!! P" <<compo <<"V" <<voisin<<"  \n# t_reb= "<<temps<<" \n# Vrn_reb= "<<vitesseRelNorm  <<std::endl;
-                    fout << "'REB',"<<compo<<","<<voisin<<","<<temps<<","<<vitesseRelNorm << std::endl;
-                    //fout << "e_app= "<<e_calc << std::endl;
-                    //fout << "error= " << 100*fabs(Tool::e_eff(compo,voisin)-e_calc)/Tool::e_eff(compo,voisin)<<std::endl;
-                  }
+                    default:
+                      Cerr << "The method specified for modele_collision in not recognized. \n" << finl;
+                      Cerr << "pls use one of : ressort_amorti,  double_raideurs,  hybrid ! your input is  :"
+                           << modele << " \n" << finl;
+                      Process::exit();
+                    }
 
-              }
+                  //<editor-fold desc="Impression en debut de contact solide">
+                  if (isFirstStepOfCollision && Process::je_suis_maitre())
+                    {
 
-            Tool::F_old(compo, voisin) = Tool::F_now(compo, voisin);
-          } // fin boucle parti
+                      fout << " # START!!! P" <<compo <<"V" <<voisin<<"  \n# t_imp= "<<temps<<" \n# Vrn_imp= "<<vitesseRelNorm<<"  \n# St_imp= "<< Stb;
 
-      } // fin boucle compo
+                      fout<<std::endl;
+                      fout << "'IMP',"<<compo<<","<<voisin<<","<<temps<<","<<vitesseRelNorm << ","<<Stb <<","<<Tool::e_eff(compo, voisin) <<","<<Tool::raideur(compo, voisin) <<std::endl;
+                    }
+                  //</editor-fold>
+
+                  for (int d = 0; d < dimension; d++)
+                    {
+
+                      //impression sans application a supprimer une fois l'implementation fonctionelle
+                      Cerr << "(*) d: " << d << "  force_contact:  " <<force_contact(d) <<finl;
+                      // continue;
+
+                      forces_solide(compo, d) += +force_contact(d) / volumes_compo(compo);
+                      if (!CollisionParticuleParticule) continue; // collision avec un bord -> pas de force sur le bord
+                      forces_solide(voisin, d) += -force_contact(d) / volumes_compo(voisin);
+                    }
+                }
+
+              //<editor-fold desc="Ipression collision encours ...">
+              if(Process::je_suis_maitre() && compo==0 && !isFirstStepOfCollision )
+                {
+                  fout << "#  COL!!! P" <<compo <<"V" <<voisin<<"   t= "<<temps;
+                  DoubleTab fc(dimension); // variable pour le calcule du module : la fonction prend un vecteur a entree unique
+                  for (int d = 0; d < dimension; d++) fc(d) = forces_solide(compo,d);
+                  fout <<"     DistInt= "<<dist_int  <<"     nDistInt= "<<next_dist_int  <<"     collision_force= "<<Tool::module_vecteur(fc)<< std::endl;
+                }
+              //</editor-fold>
+
+            }
+
+
+          //<editor-fold desc="Fin du contact solide">
+          int isLastCollision = Tool::F_now(compo, voisin) < Tool::F_old(compo, voisin);
+          if (isLastCollision)
+            {
+              //double  e_calc = vitesseRelNorm/Tool::vitessRelImp ;
+              if (Process::je_suis_maitre())
+                {
+                  fout << "#  END!!! P" <<compo <<"V" <<voisin<<"  \n# t_reb= "<<temps<<" \n# Vrn_reb= "<<vitesseRelNorm  <<std::endl;
+                  fout << "'REB',"<<compo<<","<<voisin<<","<<temps<<","<<vitesseRelNorm << std::endl;
+                  //fout << "e_app= "<<e_calc << std::endl;
+                  //fout << "error= " << 100*fabs(Tool::e_eff(compo,voisin)-e_calc)/Tool::e_eff(compo,voisin)<<std::endl;
+                }
+
+            }
+          //</editor-fold>
+
+          Tool::F_old(compo, voisin) = Tool::F_now(compo, voisin);
+        } // fin boucle parti
+
+    } // fin boucle compo
 // ---fin calcule force de collision pour chaque composante-------------------------------------------------------------
-    fout.close();
+  fout.close();
+  //</editor-fold>
 
 
-// -- Application de la force de collision aux faces euleriennes correspandantes a chaque composante
+//<editor-fold desc="Application des forces de collisions sur les faces du domaine">
+  const DoubleVect& volumes_entrelaces = zone_vf.volumes_entrelaces();
+  const int nb_elem = zone_vf.zone().nb_elem();
 
-    const DoubleVect& volumes_entrelaces = zone_vf.volumes_entrelaces();
-    const int nb_elem = zone_vf.zone().nb_elem();
+  IntVect num_compo;
+  zone_vf.zone().creer_tableau_elements(num_compo);
 
-    IntVect num_compo;
-    zone_vf.zone().creer_tableau_elements(num_compo);
+  DoubleVect num_compo_copie;
+  zone_vf.zone().creer_tableau_elements(num_compo_copie);
 
-    DoubleVect num_compo_copie;
-    zone_vf.zone().creer_tableau_elements(num_compo_copie);
+  // const DoubleTab& xp = zone_vf.xp();
 
-    // const DoubleTab& xp = zone_vf.xp();
-
-    ArrOfInt num_lagrange(nb_compo_tot);
-
-
-    for (int elem = 0; elem < nb_elem; elem++)
-      {
-        if (Tool::force_sur_elem_diphasiques)
-          {
-            //les elements diphasiques sont compris dans num compo
-            num_compo[elem] = (indicatrice[elem] == indic_phase_fluide) ? -1 : 1;
-          }
-        else
-          {
-            //les elements diphasiques ne sont pas compris dans num compo
-            num_compo[elem] = (indicatrice[elem] != 1 - indic_phase_fluide) ? -1 : 1;
-          }
-      }
-    num_compo.echange_espace_virtuel();
-
-    const IntTab& elem_faces = zone_vf.elem_faces();
-    const IntTab& faces_elem = zone_vf.face_voisins();
-    const DoubleTab& indicatrice_faces = refeq_transport.valeur().get_compute_indicatrice_faces().valeurs();
-    //const DoubleTab& cgf = zone_vf.xv();
-    const int nb_local_connex_components = search_connex_components_local(elem_faces, faces_elem, num_compo);
-    const int nb_connex_components = compute_global_connex_components(num_compo, nb_local_connex_components);
-
-    // on s'assure que le numero eulerien corresepond au bon numero lagrangien
-    //remplissage du tableau de corespandance indice interface lagrange
-    for (int compo = 0; compo < nb_compo_tot; compo++)
-      {
-        int elem = elem_cg[compo];
-        if (elem != -1)
-          {
-            int num_euler = num_compo[elem];
-            num_lagrange[num_euler] = compo;
-          }
-      }
-    mp_max_for_each_item(num_lagrange);
+  ArrOfInt num_lagrange(nb_compo_tot);
 
 
-    //syncronisation entre les indice lagrangien et eulerien dans num_compo
-    //on parcours toutes les cellule du maillage, on identifie son indice eulerien
-    // on utilise l'indice eulerien  pour trouver l'indice lagrangien correspandant
-    // on remplace l'indice eulerien par l'indice lagrengien
+  for (int elem = 0; elem < nb_elem; elem++)
+    {
+      if (Tool::force_sur_elem_diphasiques)
+        {
+          //les elements diphasiques sont compris dans num compo
+          num_compo[elem] = (indicatrice[elem] == indic_phase_fluide) ? -1 : 1;
+        }
+      else
+        {
+          //les elements diphasiques ne sont pas compris dans num compo
+          num_compo[elem] = (indicatrice[elem] != 1 - indic_phase_fluide) ? -1 : 1;
+        }
+    }
+  num_compo.echange_espace_virtuel();
 
-    const DoubleVect& volumes_maille = zone_vf.volumes();
-    DoubleTab volumes_euler(nb_compo_tot);
+  const IntTab& elem_faces = zone_vf.elem_faces();
+  const IntTab& faces_elem = zone_vf.face_voisins();
+  const DoubleTab& indicatrice_faces = refeq_transport.valeur().get_compute_indicatrice_faces().valeurs();
+  //const DoubleTab& cgf = zone_vf.xv();
+  const int nb_local_connex_components = search_connex_components_local(elem_faces, faces_elem, num_compo);
+  const int nb_connex_components = compute_global_connex_components(num_compo, nb_local_connex_components);
 
-    for (int elem = 0; elem < nb_elem; elem++)
-      {
-        if (num_compo[elem] != -1)
-          {
-            num_compo[elem] = num_lagrange[num_compo[elem]];
-          }
-        num_compo_copie[elem] = num_compo[elem]; //conversion d'un int en double pour le postraitement
+  // on s'assure que le numero eulerien corresepond au bon numero lagrangien
+  //remplissage du tableau de corespandance indice interface lagrange
+  for (int compo = 0; compo < nb_compo_tot; compo++)
+    {
+      int elem = elem_cg[compo];
+      if (elem != -1)
+        {
+          int num_euler = num_compo[elem];
+          num_lagrange[num_euler] = compo;
+        }
+    }
+  mp_max_for_each_item(num_lagrange);
 
-        if (indicatrice(elem) != 1)
-          {
-            //volume au elements
-            volumes_euler[0] += (1 - indicatrice[elem]) * volumes_maille[elem];
-            //Cerr << finl << elem << " " << indicatrice[elem] << " " << volumes_maille[elem] << " ";
-            //volume au face
-            //?
-          }
-      }
+
+  //syncronisation entre les indice lagrangien et eulerien dans num_compo
+  //on parcours toutes les cellule du maillage, on identifie son indice eulerien
+  // on utilise l'indice eulerien  pour trouver l'indice lagrangien correspandant
+  // on remplace l'indice eulerien par l'indice lagrengien
+
+  const DoubleVect& volumes_maille = zone_vf.volumes();
+  DoubleTab volumes_euler(nb_compo_tot);
+
+  for (int elem = 0; elem < nb_elem; elem++)
+    {
+      if (num_compo[elem] != -1)
+        {
+          num_compo[elem] = num_lagrange[num_compo[elem]];
+        }
+      num_compo_copie[elem] = num_compo[elem]; //conversion d'un int en double pour le postraitement
+
+      if (indicatrice(elem) != 1)
+        {
+          //volume au elements
+          volumes_euler[0] += (1 - indicatrice[elem]) * volumes_maille[elem];
+          //Cerr << finl << elem << " " << indicatrice[elem] << " " << volumes_maille[elem] << " ";
+          //volume au face
+          //?
+        }
+    }
 
 
 
 
 // valeurs_champ.resize(nb_faces);
-    // boucle sur les elements du domaine
-    for (int elem = 0; elem < nb_elem; elem++)
-      {
-        int compo = num_compo[elem];
-        if (compo != -1)
-          {
-
-            for (int ifac = 0; ifac < 2 * dimension; ifac++)
-              {
-                int face = elem_faces(elem, ifac);
-                int ori = orientation(face);
-                valeurs_champ(face) =
-                  (1 - indicatrice_faces(face)) * volumes_entrelaces(face) * forces_solide(compo, ori) * CV *
-                  //volume discret
-                  //volumes_compo(compo) / volumes_euler(compo);
-                  //volume theorique
-                  1;
-
-              }
-          }
-      }
-    valeurs_champ.echange_espace_virtuel();
-    //Tool::num_compo_=num_compo_copie;
-    variables_internes().num_compo.valeur().valeurs() = num_compo_copie;  // champ pret pour postraitement
-    //variables_internes().num_compo.changer_temps(temps);
-    //Cerr << "temps de numm compo: " <<variables_internes().num_compo.temps() <<finl;
-
-
-    // =============================================================================================================
-    //  impression
-    // =============================================================================================================
-    if (0)
-      {
-        if (Process::je_suis_maitre() && 1)
-          fout << std::scientific;
-        Cerr << nb_connex_components << longeur_maille << print_next_dist_int << finl;
-      }
-
-    if (Process::je_suis_maitre())
-      {
+  // boucle sur les elements du domaine
+  for (int elem = 0; elem < nb_elem; elem++)
+    {
+      int compo = num_compo[elem];
+      if (compo != -1)
         {
-          std::ofstream fout2;
-          fout2.open("profil_compo.txt", ios::app);
-          fout2 << std::scientific << std::showpos;
-          fout2 << temps;
-          for (int compo = 0; compo < nb_compo_tot; compo++)
-            {
-              fout2 << '\t';
-              for (int i = 0; i < dimension; i++) fout2 << " " << positions(compo, i);
-              fout2 << "  ";
-              for (int i = 0; i < dimension; i++) fout2 << " " << vitesses(compo, i);
-              //fout2 << "compo:" << compo << '\t' << positions(compo, 1) << '\t' << vitesses(compo, 1) << '\t';
-            }
-          fout2 << std::endl;
-          fout2.close();
-        }
 
+          for (int ifac = 0; ifac < 2 * dimension; ifac++)
+            {
+              int face = elem_faces(elem, ifac);
+              int ori = orientation(face);
+              valeurs_champ(face) =
+                (1 - indicatrice_faces(face)) * volumes_entrelaces(face) * forces_solide(compo, ori) * CV *
+                //volume discret
+                //volumes_compo(compo) / volumes_euler(compo);
+                //volume theorique
+                1;
+
+            }
+        }
+    }
+  valeurs_champ.echange_espace_virtuel();
+  //Tool::num_compo_=num_compo_copie;
+  variables_internes().num_compo.valeur().valeurs() = num_compo_copie;  // champ pret pour postraitement
+  //variables_internes().num_compo.changer_temps(temps);
+  //Cerr << "temps de numm compo: " <<variables_internes().num_compo.temps() <<finl;
+  //</editor-fold>
+
+
+//<editor-fold desc="Impression">
+  if (0)
+    {
+      if (Process::je_suis_maitre() && 1)
+        fout << std::scientific;
+      Cerr << nb_connex_components << longeur_maille << print_next_dist_int << finl;
+    }
+
+  if (Process::je_suis_maitre())
+    {
+      {
+        std::ofstream fout2;
+        fout2.open("profil_compo.txt", ios::app);
+        fout2 << std::scientific << std::showpos;
+        fout2 << temps;
+        for (int compo = 0; compo < nb_compo_tot; compo++)
+          {
+            fout2 << '\t';
+            for (int i = 0; i < dimension; i++) fout2 << " " << positions(compo, i);
+            fout2 << "  ";
+            for (int i = 0; i < dimension; i++) fout2 << " " << vitesses(compo, i);
+            //fout2 << "compo:" << compo << '\t' << positions(compo, 1) << '\t' << vitesses(compo, 1) << '\t';
+          }
+        fout2 << std::endl;
+        fout2.close();
       }
 
+    }
+  //</editor-fold>
 
-
-
-// =============================================================================================================
-
-
-// =============================================================================================================
 // fin
-  }
 }
 
 // Description:

@@ -16,7 +16,7 @@
 
 
 //declaration des membre donnees
-std::string Tool::myCode="commicode 016.1amd";
+std::string Tool::myCode="commicode 017mdj";
 int dimension = 3;
 double Tool::myMuPhase1=-1;
 double Tool::myMuPhase0=-1;
@@ -28,18 +28,20 @@ DoubleTab Tool::myNormaleInterfaceElem;
 DoubleTab Tool::memorisedElongation;
 
 
-double Tool::myRayon=-1;
+double Tool::myRayon=-1; // rayon de particule , cas monodisperse
 double Tool::mySigma=-1;
-int Tool::modele_collision=0; // valeur par defaut modele collision a deux raideur
-double Tool::d_desactivation_lubrification =0;
+int Tool::modele_lubrification=0; // 0 valeur par defaut : pas de lubrification
+
+double Tool::d_desactivation_lubrification=0;  // utiliser dans encienne fonction force collisions Todo: a supprimer
 
 DoubleVect Tool::myOrigine(3);
 DoubleVect Tool::myLongueurs(3);
 IntVect Tool::myNb_Noeuds(3);
 int Tool::decalage_bords=0;
+DoubleVect Tool::valeurs_decalage(6);
+
 int Tool::transport_vitesse_cg=0;
 int Tool::force_sur_elem_diphasiques=0;
-DoubleVect Tool::valeurs_decalage(6);
 
 int Tool::compteur_=0;
 DoubleTab Tool::F_old;
