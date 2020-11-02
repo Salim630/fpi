@@ -108,8 +108,8 @@ double Tool::getMyMuPhase1() {
     return myMuPhase1;
 }
 
-void Tool::setMyMuPhase1(double myMuPhase1) {
-    Tool::myMuPhase1 = myMuPhase1;
+void Tool::setMyMuPhase1(double muPhase1) {
+    Tool::myMuPhase1 = muPhase1;
 }
 
 
@@ -118,8 +118,8 @@ double Tool::getMyMuPhase0() {
     return myMuPhase0;
 }
 
-void Tool::setMyMuPhase0(double myMuPhase0) {
-    Tool::myMuPhase0 = myMuPhase0;
+void Tool::setMyMuPhase0(double muPhase0) {
+    Tool::myMuPhase0 = muPhase0;
 }
 
 
@@ -128,8 +128,8 @@ const DoubleVect &Tool::getMyIndic() {
     return myIndic;
 }
 
-void Tool::setMyIndic(const DoubleVect &myIndic) {
-    Tool::myIndic = myIndic;
+void Tool::setMyIndic(const DoubleVect &indic) {
+    Tool::myIndic = indic;
 }
 
 
@@ -138,8 +138,8 @@ const DoubleTab &Tool::getMyNormaleInterfaceElem() {
     return myNormaleInterfaceElem;
 }
 
-void Tool::setMyNormaleInterfaceElem(const DoubleTab &myNormaleInterfaceElem) {
-    Tool::myNormaleInterfaceElem = myNormaleInterfaceElem;
+void Tool::setMyNormaleInterfaceElem(const DoubleTab &normaleInterfaceElem) {
+    Tool::myNormaleInterfaceElem = normaleInterfaceElem;
 }
 
 double Tool::calc_positions_bords(ArrOfDouble &positions_bords)

@@ -54,16 +54,16 @@ public:
     //Setters and Getters
 
     static const DoubleVect &getMyIndic();
-    static void setMyIndic(const DoubleVect &myIndic);
+    static void setMyIndic(const DoubleVect &indic);
 
     static double getMyMuPhase1();
-    static void setMyMuPhase1(double myMuPhase1);
+    static void setMyMuPhase1(double muPhase1);
 
     static double getMyMuPhase0();
-    static void setMyMuPhase0(double myMuPhase0);
+    static void setMyMuPhase0(double muPhase0);
 
     static const DoubleTab &getMyNormaleInterfaceElem();
-    static void setMyNormaleInterfaceElem(const DoubleTab &myNormaleInterfaceElem);
+    static void setMyNormaleInterfaceElem(const DoubleTab &normaleInterfaceElem);
 
     static double calc_positions_bords(ArrOfDouble &positions_bords);
 
