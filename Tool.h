@@ -87,6 +87,8 @@ public:
     static DoubleVect valeurs_decalage;
     static int transport_vitesse_cg;
     static int force_sur_elem_diphasiques;
+
+    static DoubleVect param_osillateur;
 };
 
 

@@ -44,6 +44,7 @@
 #include <Matrice_Bloc.h>
 #include <Param.h>
 #include <Tool.h>
+#include <Statistiques.h>
 #include <Connex_components_FT.h>
 #include <communications.h>
 #include <Connex_components.h>
@@ -384,6 +385,7 @@ void Navier_Stokes_FT_Disc::set_param(Param& param)
   param.ajouter("modele_lubrification", &Tool::modele_lubrification);
   param.ajouter("d_desactivation_lubrification", &Tool::d_desactivation_lubrification);
   param.ajouter("modele_collisions", &variables_internes().modele_collisions_,Param::REQUIRED);
+  param.ajouter_arr_size_predefinie("param_oscillateur", &Tool::param_osillateur);
 
   param.ajouter("decalage_bords", &Tool::decalage_bords);
   param.ajouter("force_sur_elem_diphasiques", &Tool::force_sur_elem_diphasiques);
@@ -398,10 +400,12 @@ int Navier_Stokes_FT_Disc::modele_collisions() const
   const Motcle& le_mot_cle =variables_internes().modele_collisions_;
   if (le_mot_cle == "ressort_amorti")
     return 0;
-  else if (le_mot_cle == "double_raideurs")
+  else if (le_mot_cle == "mohagheg")
     return 1;
   else if (le_mot_cle == "hybrid" )
     return 2;
+  else if (le_mot_cle == "breugem" )
+    return 3;
   else
     return -1;
 }
@@ -2163,7 +2167,8 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions(const DoubleTab& in
 void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& indicatrice, DoubleTab& valeurs_champ,
                                                               double& FC)
 {
-
+  static const Stat_Counter_Id count = statistiques().new_counter(1, "calculer_forces_collisions", 0);
+  statistiques().begin_count(count);
 
 //
 
@@ -2490,9 +2495,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
                     case 0:
                       {
                         //Cerr << "Modele ressort_amorti. \n" << finl;
-                        int Nc=8;
-                        double raideur = (masse_eff * (myPI * myPI + pow(log(ed), 2))) / pow(Nc * dt, 2);
-                        double amortisseur = -1*(masse_eff * log(ed)) / (Nc * dt);
+
+                        double raideur = Tool::param_osillateur(0) ;
+                        double amortisseur = Tool::param_osillateur(1) ;
 
                         for (int d = 0; d < dimension; d++)
                           force_contact(d)=-1 * raideur * next_dist_int * norm(d) -1*amortisseur*dUn(d);
@@ -2501,7 +2506,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
 
                     case 1:
                       {
-                        //Cerr << "Modele a deux raideurs. \n" << finl;
+                        //Cerr << "Modele Mohagheg. \n" << finl;
 
                         //int isFirstStepOfCollision = Tool::F_now(compo, voisin) > Tool::F_old(compo, voisin);
                         if (isFirstStepOfCollision)
@@ -2536,6 +2541,17 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
                         for (int d = 0; d < dimension; d++)
                           force_contact(d)=-1 * e_eff * e_eff * raideur * next_dist_int * norm(d);
 
+                      }
+                      break;
+                    case 3:
+                      {
+                        //Cerr << "Modele Breugem. \n" << finl;
+                        int Nc=8;
+                        double raideur = (masse_eff * (myPI * myPI + pow(log(ed), 2))) / pow(Nc * dt, 2);
+                        double amortisseur = -1*(masse_eff * log(ed)) / (Nc * dt);
+
+                        for (int d = 0; d < dimension; d++)
+                          force_contact(d)=-1 * raideur * next_dist_int * norm(d) -1*amortisseur*dUn(d);
                       }
                       break;
 
@@ -2750,6 +2766,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
   //</editor-fold>
 
 // fin
+  statistiques().end_count(count);
 }
 
 // Description:
