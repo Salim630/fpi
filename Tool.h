@@ -78,7 +78,7 @@ public:
     static int checkForDuplicates(ArrOfInt &vector);
 
 
-    static void backup_myVariables();
+    static void backup_myVariables(double d);
     static void load_myVariables();
 
 

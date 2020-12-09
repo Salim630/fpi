@@ -16,7 +16,7 @@
 
 
 //declaration des membre donnees
-std::string Tool::myCode="commicode 018poe";
+std::string Tool::myCode="commicode 018.1asr";
 int dimension = 3;
 double Tool::myMuPhase1=-1;
 double Tool::myMuPhase0=-1;
@@ -243,17 +243,24 @@ int Tool::checkForDuplicates(ArrOfInt &vector)
 }
 
 
-void Tool::backup_myVariables()
+void Tool::backup_myVariables(double d)
 {
     if (Process::je_suis_maitre())
     {
-    SFichier os("backup.dat");
-    os <<compteur_<<finl;
-    os<<myRayon<<finl;
-    os<<mySigma<<finl;
-    os<<myOrigine<<myLongueurs<<myNb_Noeuds;
-    os<<positions_compo<<vitesses_compo;
-    os <<F_old<<raideur<< e_eff<<finl;
+//        Nom command;
+//        command = "mkdir -p backup/";
+//        command += Nom(d);
+        std::cerr << system(Nom("mkdir -p backup/")+Nom(d)) << std::endl;
+    //    int dir = system();
+    //    assert(dir ==1);
+
+        SFichier os(Nom("backup/")+Nom(d)+"/backup.dat"+"");
+        os <<compteur_<<finl;
+        os<<myRayon<<finl;
+        os<<mySigma<<finl;
+        os<<myOrigine<<myLongueurs<<myNb_Noeuds;
+        os<<positions_compo<<vitesses_compo;
+        os <<F_old<<raideur<< e_eff<<finl;
     }
 
     //EcrFicCollecteBin pos ("backup.lat");
