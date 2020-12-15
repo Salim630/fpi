@@ -336,7 +336,7 @@ void mon_main::dowork(const Nom& nom_du_cas)
   Cout << finl;
   Cout << "--------------------------------------------" << finl;
   Cout << "clock: Total execution: " << temps << " s" << finl;
-  printf("%s\n",Tool::myCode.c_str());
+  if(Process::je_suis_maitre()) printf("%s\n",Tool::myCode.c_str());
   if (!get_disable_stop())
     {
       SFichier ficstop ( nomfic);

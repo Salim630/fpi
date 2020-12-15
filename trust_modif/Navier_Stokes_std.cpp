@@ -42,7 +42,7 @@
 #include <Ensemble_Lagrange_base.h>
 #include <SFichier.h>
 #include <Param.h>
-#include "Tool.h"
+#include <Tool.h>
 
 Implemente_instanciable_sans_constructeur(Navier_Stokes_std,"Navier_Stokes_standard",Equation_base);
 

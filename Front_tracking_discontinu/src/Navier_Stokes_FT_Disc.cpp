@@ -2294,7 +2294,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
           }
         mp_max_for_each_item(correctNum);
         int isduplicateValue = Tool::checkForDuplicates(correctNum);
-        if (isduplicateValue == 1) exit("ERROR: duplicate value");
+        if (isduplicateValue == 1) Process::exit("ERROR: duplicate value");
       }
 
       for (int bad_compo = 0; bad_compo < nb_compo_tot; bad_compo++)
@@ -2358,11 +2358,13 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
       masse_compo[compo] = volumes_compo[compo] * rho_solide;
     }
 
-
+#if !defined(NDEBUG)
   std::ofstream fout;
   fout.open("details_colisions.txt", ios::app);
   fout << std::scientific;
   //</editor-fold>
+#endif
+
 
 
 //<editor-fold desc="Calcule des forces de collisions">
@@ -2445,7 +2447,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
               for (int d = 0; d < dimension; d++)
                 {
                   double force_lubrification = -6 * myPI * mu_fluide * rayons_compo[compo] * dUn(d) * delta_lambda;
-                  Cerr << "(*) d: " << d << "  force_lubrification:  " <<force_lubrification <<finl;
+                  //Cerr << "(*) d: " << d << "  force_lubrification:  " <<force_lubrification <<finl;
                   continue;
                   forces_solide(compo, d) += +force_lubrification / volumes_compo(compo);
                   if (!CollisionParticuleParticule) continue; //collision avec un bord -> pas de force sur le bord
@@ -2563,22 +2565,23 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
                       Process::exit();
                     }
 
+
+#if !defined(NDEBUG)
                   //<editor-fold desc="Impression en debut de contact solide">
                   if (isFirstStepOfCollision && Process::je_suis_maitre())
                     {
 
                       fout << " # START!!! P" <<compo <<"V" <<voisin<<"  \n# t_imp= "<<temps<<" \n# Vrn_imp= "<<vitesseRelNorm<<"  \n# St_imp= "<< Stb;
-
                       fout<<std::endl;
                       fout << "'IMP',"<<compo<<","<<voisin<<","<<temps<<","<<vitesseRelNorm << ","<<Stb <<","<<Tool::e_eff(compo, voisin) <<","<<Tool::raideur(compo, voisin) <<std::endl;
                     }
                   //</editor-fold>
-
+#endif
                   for (int d = 0; d < dimension; d++)
                     {
 
                       //impression sans application a supprimer une fois l'implementation fonctionelle
-                      Cerr << "(*) d: " << d << "  force_contact:  " <<force_contact(d) <<finl;
+                      //Cerr << "(*) d: " << d << "  force_contact:  " <<force_contact(d) <<finl;
                       // continue;
 
                       forces_solide(compo, d) += +force_contact(d) / volumes_compo(compo);
@@ -2586,24 +2589,28 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
                       forces_solide(voisin, d) += -force_contact(d) / volumes_compo(voisin);
                     }
                 }
-
+#if !defined(NDEBUG)
               //<editor-fold desc="Ipression collision encours ...">
               if(Process::je_suis_maitre() && compo==0 && !isFirstStepOfCollision )
                 {
-                  fout << "#  COL!!! P" <<compo <<"V" <<voisin<<"   t= "<<temps;
                   DoubleTab fc(dimension); // variable pour le calcule du module : la fonction prend un vecteur a entree unique
                   for (int d = 0; d < dimension; d++) fc(d) = forces_solide(compo,d);
+
+                  fout << "#  COL!!! P" <<compo <<"V" <<voisin<<"   t= "<<temps;
                   fout <<"     DistInt= "<<dist_int  <<"     nDistInt= "<<next_dist_int  <<"     collision_force= "<<Tool::module_vecteur(fc)<< std::endl;
                 }
               //</editor-fold>
-
+#endif
             }
 
 
           //<editor-fold desc="Fin du contact solide">
           int isLastCollision = Tool::F_now(compo, voisin) < Tool::F_old(compo, voisin);
+
+
           if (isLastCollision)
             {
+#if !defined(NDEBUG)
               //double  e_calc = vitesseRelNorm/Tool::vitessRelImp ;
               if (Process::je_suis_maitre())
                 {
@@ -2612,8 +2619,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
                   //fout << "e_app= "<<e_calc << std::endl;
                   //fout << "error= " << 100*fabs(Tool::e_eff(compo,voisin)-e_calc)/Tool::e_eff(compo,voisin)<<std::endl;
                 }
-
+#endif
             }
+
           //</editor-fold>
 
           Tool::F_old(compo, voisin) = Tool::F_now(compo, voisin);
@@ -2621,7 +2629,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
 
     } // fin boucle compo
 // ---fin calcule force de collision pour chaque composante-------------------------------------------------------------
+#if !defined(NDEBUG)
   fout.close();
+#endif
   //</editor-fold>
 
 
@@ -2734,14 +2744,18 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
   //Cerr << "temps de numm compo: " <<variables_internes().num_compo.temps() <<finl;
   //</editor-fold>
 
-
-//<editor-fold desc="Impression">
+  // Espace pour stoké temporairement les variables non utilisees
   if (0)
     {
       if (Process::je_suis_maitre() && 1)
-        fout << std::scientific;
-      Cerr << nb_connex_components << longeur_maille << print_next_dist_int << finl;
+        Cerr << temps<< nb_connex_components << longeur_maille << print_next_dist_int << finl;
     }
+
+// Impression dans fichier en mode debug
+#if !defined(NDEBUG)
+  // debug build code
+
+
 
   if (Process::je_suis_maitre())
     {
@@ -2763,7 +2777,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
       }
 
     }
+
   //</editor-fold>
+#endif
 
 // fin
   statistiques().end_count(count);
