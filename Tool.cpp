@@ -16,7 +16,7 @@
 
 
 //declaration des membre donnees
-std::string Tool::myCode="commicode 018.2asr";
+std::string Tool::myCode="commicode 018.3efd";
 int dimension = 3;
 double Tool::myMuPhase1=-1;
 double Tool::myMuPhase0=-1;
@@ -186,7 +186,7 @@ double Tool::calc_positions_bords2(ArrOfDouble &positions_bords)
     }
 
 
-
+    // les bords sont traites comme des particules fectives placer en dehors du domaine, en mirroir.
     //double epsi =dx/4;
     positions_bords[0] = myOrigine(0)- myRayon + valeurs_decalage(0);
     positions_bords[1] = myOrigine(1)- myRayon + valeurs_decalage(1);

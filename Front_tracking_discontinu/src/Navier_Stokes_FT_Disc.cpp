@@ -2169,7 +2169,9 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
 {
   static const Stat_Counter_Id count = statistiques().new_counter(1, "calculer_forces_collisions", 0);
   statistiques().begin_count(count);
-
+  static const Stat_Counter_Id stat_counter =
+    statistiques().new_counter(3, "Calculer_distance_interface", "FrontTracking");
+  statistiques().begin_count(stat_counter);
 //
 
 //<editor-fold desc="Determiniations des vitesses et positions de chaques particule">
@@ -2745,41 +2747,71 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
   //</editor-fold>
 
   // Espace pour stoké temporairement les variables non utilisees
-  if (0)
+  if (1)
     {
+      // tentative de recuperation des positions des bord proprement ( toujours pas reussi pour le momemnt )
+      const Zone_dis_base& ma_zone_dis = zone_dis().valeur();
+      const Zone_Cl_dis_base& zcldis = zone_Cl_dis().valeur();
+
+      int num_cl, num_fin;
+      num_fin = ma_zone_dis.nb_front_Cl();
+      for (num_cl=0 ; num_cl< num_fin; num_cl++)
+        {
+          const Cond_lim& la_cl = zcldis.les_conditions_limites(num_cl);
+          const Front_VF& le_bord = ref_cast(Front_VF,la_cl.frontiere_dis());
+          int num_face = le_bord.num_premiere_face();
+          int ori = orientation(num_face);
+          double x=zone_vf.xv(num_face,ori);
+
+
+          Cerr << "bord : " << num_cl ;
+          Cerr << " num_face : " << num_face ;
+//          Cerr << " la_cl : " << la_cl.valeur() ;
+          Cerr << " ori : " << ori ;
+          Cerr << " pos : " << x ;
+          Cerr << finl;
+
+        }
+
       if (Process::je_suis_maitre() && 1)
         Cerr << temps<< nb_connex_components << longeur_maille << print_next_dist_int << finl;
+
+
     }
 
-// Impression dans fichier en mode debug
-#if !defined(NDEBUG)
-  // debug build code
-
-
+// Ecriture du fichier .dump pour ovito et visit
 
   if (Process::je_suis_maitre())
     {
       {
-        std::ofstream fout2;
-        fout2.open("profil_compo.txt", ios::app);
-        fout2 << std::scientific << std::showpos;
-        fout2 << temps;
+        ofstream fdump;
+        fdump.open("donnees_particules.dump", ios::app);
+        fdump << "ITEM: TIMESTEP"  << std::endl;
+        // ligne non standard : ajout d'un comentaire en fin de ligne pour recuperer le temps avec python
+        fdump << Tool::compteur_  << "\t\t#TIME: "<< temps <<std::endl;
+        fdump << "ITEM: NUMBER OF ATOMS"  << std::endl;
+        fdump << nb_compo_tot  << std::endl;
+        fdump << "ITEM: BOX BOUNDS ff ff ff"  << std::endl;
+        fdump << Tool::myOrigine(0) << "  " << Tool::myOrigine(0) + Tool::myLongueurs(0) << std::endl;
+        fdump << Tool::myOrigine(1) << "  " << Tool::myOrigine(1) + Tool::myLongueurs(1) << std::endl;
+        fdump << Tool::myOrigine(2) << "  " << Tool::myOrigine(2) + Tool::myLongueurs(2) << std::endl;
+        fdump << "ITEM: ATOMS id type radius x y z vx vy vz fx fy fz "  << std::endl;
+
         for (int compo = 0; compo < nb_compo_tot; compo++)
           {
-            fout2 << '\t';
-            for (int i = 0; i < dimension; i++) fout2 << " " << positions(compo, i);
-            fout2 << "  ";
-            for (int i = 0; i < dimension; i++) fout2 << " " << vitesses(compo, i);
-            //fout2 << "compo:" << compo << '\t' << positions(compo, 1) << '\t' << vitesses(compo, 1) << '\t';
+            fdump << compo << " 9 " << rayons_compo(compo) << " "; // 9 couleur blanc sur ovito
+            for (int d = 0; d < dimension; d++) fdump << positions(compo,d) << " " ;
+            for (int d = 0; d < dimension; d++) fdump << vitesses(compo,d) << " " ;
+            for (int d = 0; d < dimension; d++) fdump << forces_solide(compo,d) << " " ;
+            fdump << std::endl;
           }
-        fout2 << std::endl;
-        fout2.close();
+        fdump.close();
       }
 
     }
 
   //</editor-fold>
-#endif
+
 
 // fin
   statistiques().end_count(count);

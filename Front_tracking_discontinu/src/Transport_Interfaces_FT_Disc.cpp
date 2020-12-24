@@ -6206,7 +6206,8 @@ void Transport_Interfaces_FT_Disc::deplacer_maillage_ft_v_fluide(const double te
 
       calculer_vitesse_repere_local(maillage, deplacement,Positions,Vitesses);
       assert(Positions.dimension(0)==Vitesses.dimension(0));
-      if(Process::je_suis_maitre())
+      int impression_fichier = 0;
+      if(Process::je_suis_maitre() && impression_fichier)
         {
           ofstream fout;
           fout.open("composantes_connexes.txt",ios::app);
