@@ -5,6 +5,7 @@
 #ifndef DNS_TOOL_H
 #define DNS_TOOL_H
 
+#define DEBUG_COLLISION 0
 
 #include <DoubleVect.h>
 #include <DoubleTab.h>
@@ -91,6 +92,36 @@ public:
     static DoubleVect param_osillateur;
 };
 
+
+#if DEBUG_COLLISION
+#define PRINT_PROFIL_COMPO_TXT {                                                                               \
+std::ofstream fout2;                                                                                           \
+fout2.open("profil_compo.txt", ios::app);                                                                      \
+fout2 << std::scientific << std::showpos;                                                                      \
+fout2 << temps;                                                                                                \
+for (int compo = 0; compo < nb_compo_tot; compo++)                                                             \
+{                                                                                                              \
+fout2 << '\t';                                                                                                 \
+for (int i = 0; i < dimension; i++) fout2 << " " << positions(compo, i);                                       \
+fout2 << "  ";                                                                                                 \
+for (int i = 0; i < dimension; i++) fout2 << " " << vitesses(compo, i);                                        \
+fout2 << "  ";                                                                                                 \
+for (int i = 0; i < dimension; i++) fout2 << " " << forces_solide(compo, i);                                   \
+}                                                                                                              \
+fout2 << std::endl;                                                                                            \
+fout2.close();                                                                                                 \
+}                                                                                                              \
+
+#define DEBUG_MODELE_HYBRID                                                                                    \
+Cerr <<"k1 = " << Tool::raideur(compo, voisin) << finl;                                                        \
+Cerr <<"e_app = " << Tool::e_eff(compo, voisin) << finl;                                                       \
+
+#else
+
+#define PRINT_PROFIL_COMPO_TXT {}
+#define DEBUG_MODELE_HYBRID {}
+
+#endif  // end macros
 
 
 #endif //DNS_TOOL_H

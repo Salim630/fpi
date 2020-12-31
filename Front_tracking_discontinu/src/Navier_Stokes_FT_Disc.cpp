@@ -53,6 +53,7 @@
 #include <SFichier.h>
 #include <EFichier.h>
 
+
 // #include <chrono>
 // using namespace std::chrono;
 
@@ -108,7 +109,8 @@ public:
   //-----------------
   Champ_Fonc terme_source_collisions;
   Champ_Fonc  num_compo;
-  Motcle modele_collisions_;
+  Motcle modele_collisions_; // bidouillage pour ne pas passer par "lire mot cle non standard",alors que je devrais
+
   //-----------------
 
   LIST(REF(Champ_base)) liste_champs_compris;
@@ -132,7 +134,10 @@ public:
   // Valeur maximale de courbure autorisee pour calculer le
   // terme source de tension de surface (clipping si valeur superieur)
   double clipping_courbure_interface;
-
+//-----------
+  enum Modele_collisions { RESSORT_AMORTI_VVA, RESSORT_AMORTI_ESI, RESSORT_AMORTI_EE, MOHAGHEG,HYBRID_EE, HYBRID_ESI, HYBRID_VVA, BREUGEM };
+  Modele_collisions modele_collisions;
+//-----------
   enum Terme_Gravite { GRAVITE_RHO_G, GRAVITE_GRAD_I };
   Terme_Gravite terme_gravite_;
   Noms equations_concentration_source_fluide_;
@@ -395,19 +400,23 @@ void Navier_Stokes_FT_Disc::set_param(Param& param)
   param.ajouter_arr_size_predefinie("Nombre_de_Noeuds", &Tool::myNb_Noeuds,Param::REQUIRED);
   param.ajouter_arr_size_predefinie("Longueurs", &Tool::myLongueurs,Param::REQUIRED);
 }
-int Navier_Stokes_FT_Disc::modele_collisions() const
+void Navier_Stokes_FT_Disc::modele_collisions()
 {
   const Motcle& le_mot_cle =variables_internes().modele_collisions_;
-  if (le_mot_cle == "ressort_amorti")
-    return 0;
-  else if (le_mot_cle == "mohagheg")
-    return 1;
-  else if (le_mot_cle == "hybrid" )
-    return 2;
-  else if (le_mot_cle == "breugem" )
-    return 3;
+  if (le_mot_cle == "ressort_amorti") variables_internes().modele_collisions = Navier_Stokes_FT_Disc_interne::RESSORT_AMORTI_ESI;
+  else if (le_mot_cle == "ressort_amorti_vva")  variables_internes().modele_collisions = Navier_Stokes_FT_Disc_interne::RESSORT_AMORTI_VVA;
+  else if (le_mot_cle == "ressort_amorti_ee")  variables_internes().modele_collisions = Navier_Stokes_FT_Disc_interne::RESSORT_AMORTI_EE;
+  else if (le_mot_cle == "mohagheg")    variables_internes().modele_collisions = Navier_Stokes_FT_Disc_interne::MOHAGHEG;
+  else if (le_mot_cle == "hybrid" )    variables_internes().modele_collisions = Navier_Stokes_FT_Disc_interne::HYBRID_ESI;
+  else if (le_mot_cle == "hybrid_ee" )    variables_internes().modele_collisions = Navier_Stokes_FT_Disc_interne::HYBRID_EE;
+  else if (le_mot_cle == "hybrid_vva" )        variables_internes().modele_collisions = Navier_Stokes_FT_Disc_interne::HYBRID_VVA;
+  else if (le_mot_cle == "breugem" )      variables_internes().modele_collisions = Navier_Stokes_FT_Disc_interne::BREUGEM;
   else
-    return -1;
+    {
+      Cerr << "Error keyword"<< finl;
+      barrier();
+      exit();
+    }
 }
 int Navier_Stokes_FT_Disc::lire_motcle_non_standard(const Motcle& mot, Entree& is)
 {
@@ -534,6 +543,7 @@ int Navier_Stokes_FT_Disc::lire_motcle_non_standard(const Motcle& mot, Entree& i
         {
         case 0:
           variables_internes().terme_gravite_ = Navier_Stokes_FT_Disc_interne::GRAVITE_RHO_G;
+
           break;
         case 1:
           variables_internes().terme_gravite_ = Navier_Stokes_FT_Disc_interne::GRAVITE_GRAD_I;
@@ -2492,11 +2502,11 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
                   double Stb = rho_solide * 2 * rayon_eff * vitesseRelNorm / (9 * mu_fluide);
 
                   DoubleTab force_contact(dimension);
-                  const int modele=modele_collisions();
-                  switch (modele)
+                  modele_collisions();
+                  switch (variables_internes().modele_collisions)
                     {
 
-                    case 0:
+                    case Navier_Stokes_FT_Disc_interne::RESSORT_AMORTI_ESI:
                       {
                         //Cerr << "Modele ressort_amorti. \n" << finl;
 
@@ -2507,8 +2517,38 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
                           force_contact(d)=-1 * raideur * next_dist_int * norm(d) -1*amortisseur*dUn(d);
                       }
                       break;
+                    case Navier_Stokes_FT_Disc_interne::RESSORT_AMORTI_EE:
+                      {
+                        //Cerr << "Modele ressort_amorti. \n" << finl;
 
-                    case 1:
+                        double raideur = Tool::param_osillateur(0) ;
+                        double amortisseur = Tool::param_osillateur(1) ;
+
+                        for (int d = 0; d < dimension; d++)
+                          force_contact(d)=-1 * raideur * dist_int * norm(d) -1*amortisseur*dUn(d);
+                      }
+                      break;
+
+                    case Navier_Stokes_FT_Disc_interne::RESSORT_AMORTI_VVA:
+                      {
+                        //Cerr << "Modele ressort_amorti. \n" << finl;
+
+                        double raideur = Tool::param_osillateur(0) ;
+                        double amortisseur = Tool::param_osillateur(1) ;
+
+                        for (int d = 0; d < dimension; d++)
+                          {
+
+                            double F_n = -1 * raideur * dist_int * norm(d) -1*amortisseur*dUn(d);
+                            double y_np1 = dist_int + dUn(d) * dt +0.5 * F_n * dt * dt / masse_eff ;
+                            double u_np12 = dUn(d) + 0.5 * F_n * dt / masse_eff ;
+                            double F_np1 = -1 * raideur * y_np1 * norm(d) -1*amortisseur*u_np12;
+                            force_contact(d)=F_np1;
+                          }
+                      }
+                      break;
+
+                    case Navier_Stokes_FT_Disc_interne::MOHAGHEG:
                       {
                         //Cerr << "Modele Mohagheg. \n" << finl;
 
@@ -2526,28 +2566,75 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
                           force_contact(d)=-1 * e_eff * e_eff * raideur * next_dist_int * norm(d);
                       }
                       break;
-
-                    case 2:
+                    case Navier_Stokes_FT_Disc_interne::HYBRID_EE:
                       {
-                        //Cerr << "Modele hybrid. \n" << finl;
+                        Cerr << "Modele hybrid. \n" << finl;
 
-                        //int isFirstStepOfCollision = Tool::F_now(compo, voisin) > Tool::F_old(compo, voisin);
                         if (isFirstStepOfCollision)
                           {
                             double  tau_c = 8 * dt ;
                             Tool::e_eff(compo, voisin) = ed * exp(-35 / (Stb + 1e-6));
                             Tool::raideur(compo, voisin) = (masse_eff * (myPI * myPI + pow(log(ed), 2))) / pow(tau_c, 2);
                           }
-                        int isPhasePenetration = prod_sacl <= 0;
-                        double e_eff = isPhasePenetration ? 1 : Tool::e_eff(compo, voisin);
+                        int isPhaseCompression = prod_sacl <= 0;
+                        double e_eff = isPhaseCompression ? 1 : Tool::e_eff(compo, voisin);
+                        double raideur = Tool::raideur(compo, voisin);
+                        for (int d = 0; d < dimension; d++)
+                          {
+                            force_contact(d)=-1 * e_eff * e_eff * raideur * dist_int * norm(d);
+                          }
+                        DEBUG_MODELE_HYBRID
+                      }
+                      break;
+                    case Navier_Stokes_FT_Disc_interne::HYBRID_ESI:
+                      {
+
+                        if (isFirstStepOfCollision)
+                          {
+                            double  tau_c = 8 * dt ;
+                            Tool::e_eff(compo, voisin) = ed * exp(-35 / (Stb + 1e-6));
+                            Tool::raideur(compo, voisin) = (masse_eff * (myPI * myPI + pow(log(ed), 2))) / pow(tau_c, 2);
+                          }
+                        int isPhaseCompression = prod_sacl <= 0;
+                        double e_eff = isPhaseCompression ? 1 : Tool::e_eff(compo, voisin);
                         double raideur = Tool::raideur(compo, voisin);
 
                         for (int d = 0; d < dimension; d++)
-                          force_contact(d)=-1 * e_eff * e_eff * raideur * next_dist_int * norm(d);
-
+                          {
+                            force_contact(d)=-1 * e_eff * e_eff * raideur * next_dist_int * norm(d);
+                          }
+                        DEBUG_MODELE_HYBRID
                       }
                       break;
-                    case 3:
+
+                    case Navier_Stokes_FT_Disc_interne::HYBRID_VVA:
+                      {
+                        if (isFirstStepOfCollision)
+                          {
+                            double  tau_c = 8 * dt ;
+                            Tool::e_eff(compo, voisin) = ed * exp(-35 / (Stb + 1e-6));
+                            Tool::raideur(compo, voisin) = (masse_eff * (myPI * myPI + pow(log(ed), 2))) / pow(tau_c, 2);
+
+                          }
+
+                        int isPhaseCompression = prod_sacl <= 0;
+                        double e_eff = isPhaseCompression ? 1 : Tool::e_eff(compo, voisin);
+                        double raideur = Tool::raideur(compo, voisin);
+
+                        for (int d = 0; d < dimension; d++)
+                          {
+                            double F_n = -1 * raideur * dist_int * norm(d) ;
+                            double y_np1 = dist_int + dUn(d) * dt +0.5 * F_n * dt * dt / masse_eff ;
+                            double F_np1 = -1 * e_eff * e_eff*raideur * y_np1 * norm(d) ;
+                            force_contact(d)=F_np1;
+                          }
+                        DEBUG_MODELE_HYBRID
+                      }
+
+                      break;
+
+
+                    case Navier_Stokes_FT_Disc_interne::BREUGEM:
                       {
                         //Cerr << "Modele Breugem. \n" << finl;
                         int Nc=8;
@@ -2562,8 +2649,6 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
 
                     default:
                       Cerr << "The method specified for modele_collision in not recognized. \n" << finl;
-                      Cerr << "pls use one of : ressort_amorti,  double_raideurs,  hybrid ! your input is  :"
-                           << modele << " \n" << finl;
                       Process::exit();
                     }
 
@@ -2689,7 +2774,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
 
 
   //syncronisation entre les indice lagrangien et eulerien dans num_compo
-  //on parcours toutes les cellule du maillage, on identifie son indice eulerien
+  //on parcour toutes les cellules du maillage, on identifie son indice eulerien
   // on utilise l'indice eulerien  pour trouver l'indice lagrangien correspandant
   // on remplace l'indice eulerien par l'indice lagrengien
 
@@ -2747,7 +2832,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
   //</editor-fold>
 
   // Espace pour stoké temporairement les variables non utilisees
-  if (1)
+  if (0)
     {
       // tentative de recuperation des positions des bord proprement ( toujours pas reussi pour le momemnt )
       const Zone_dis_base& ma_zone_dis = zone_dis().valeur();
@@ -2807,7 +2892,7 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
           }
         fdump.close();
       }
-
+      //PRINT_PROFIL_COMPO_TXT
     }
 
   //</editor-fold>

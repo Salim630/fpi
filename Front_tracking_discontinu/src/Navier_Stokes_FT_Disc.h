@@ -117,7 +117,7 @@ private:
 
   void calculer_champ_forces_collisions2(const DoubleTab& indicatrice, DoubleTab& valeurs_champ, double& FC);
 
-  int modele_collisions() const;
+  void modele_collisions();
 };
 
 
