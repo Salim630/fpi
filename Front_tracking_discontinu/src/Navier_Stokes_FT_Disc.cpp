@@ -2858,9 +2858,8 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
 
         }
 
-      if (Process::je_suis_maitre() && 1)
+      if (Process::je_suis_maitre() && 0)
         Cerr << temps<< nb_connex_components << longeur_maille << print_next_dist_int << finl;
-
 
     }
 
@@ -2892,7 +2891,14 @@ void Navier_Stokes_FT_Disc::calculer_champ_forces_collisions2(const DoubleTab& i
           }
         fdump.close();
       }
-      //PRINT_PROFIL_COMPO_TXT
+
+      if(nb_compo_tot<=5)
+        {
+          // si je simule moins de 5 particules je suis surement entrain de debug, du coup on ecris le fichier
+          // profil_compo.txt qui est plus simple a visualiser avec gnuplotc
+          PRINT_PROFIL_COMPO_TXT
+        }
+
     }
 
   //</editor-fold>

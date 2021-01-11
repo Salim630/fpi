@@ -94,6 +94,16 @@ public:
 
 
 #if DEBUG_COLLISION
+
+
+#define DEBUG_MODELE_HYBRID                                                                                    \
+Cerr <<"k1 = " << Tool::raideur(compo, voisin) << finl;                                                        \
+Cerr <<"e_app = " << Tool::e_eff(compo, voisin) << finl;                                                       \
+
+#else
+#define DEBUG_MODELE_HYBRID {}
+#endif
+
 #define PRINT_PROFIL_COMPO_TXT {                                                                               \
 std::ofstream fout2;                                                                                           \
 fout2.open("profil_compo.txt", ios::app);                                                                      \
@@ -111,17 +121,6 @@ for (int i = 0; i < dimension; i++) fout2 << " " << forces_solide(compo, i);    
 fout2 << std::endl;                                                                                            \
 fout2.close();                                                                                                 \
 }                                                                                                              \
-
-#define DEBUG_MODELE_HYBRID                                                                                    \
-Cerr <<"k1 = " << Tool::raideur(compo, voisin) << finl;                                                        \
-Cerr <<"e_app = " << Tool::e_eff(compo, voisin) << finl;                                                       \
-
-#else
-
-#define PRINT_PROFIL_COMPO_TXT {}
-#define DEBUG_MODELE_HYBRID {}
-
-#endif  // end macros
 
 
 #endif //DNS_TOOL_H
